@@ -1,0 +1,3 @@
+[exchanges]
+[exchanges.ftx]
+url= "https://ftx.com/api"
