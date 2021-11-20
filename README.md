@@ -1,6 +1,6 @@
 # crypto exchange BOT SDK
 
-- [ ] Retrieves market prices form various exchange in an homogeneous way
+- [ ] Retrieves market prices form various exchange in a homogeneous way
   - [ ] [Binance](https://binance-docs.github.io/apidocs)
   - [ ] [FTX](https://docs.ftx.com/?python#rest-api)
   - [ ] [Kucoin](https://docs.kucoin.com/#general)
