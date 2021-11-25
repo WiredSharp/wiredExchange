@@ -1,0 +1,6 @@
+pandas~=1.3.4
+SQLAlchemy~=1.4.27
+python-dotenv~=0.19.2
+httpx~=0.21.1
+pytomlpp~=1.0.9
+tzlocal
