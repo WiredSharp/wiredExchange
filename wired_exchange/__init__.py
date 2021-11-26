@@ -8,7 +8,7 @@ import os.path
 _logger = logging.getLogger(__name__)
 resource_path = os.path.join(os.path.split(__file__)[0], "resources")
 
-VERSION = '1.0.0'
+__version__ = '1.0.0'
 
 
 def __merge(a, b, path=None):
@@ -98,7 +98,7 @@ class ExchangeClient:
                                                     _log_request],
                                                 'response': [log_response, raise_on_4xx_5xx]},
                                             headers={'Accept': 'application/json',
-                                                     "User-Agent": "wired_exchange/" + VERSION})
+                                                     "User-Agent": "wired_exchange/" + __version__})
             self._logger.debug(f'instantiate http client for {self}')
         return self
 

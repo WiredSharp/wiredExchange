@@ -1,4 +1,5 @@
 import json
+import shutil
 from datetime import datetime, timedelta
 import logging
 
@@ -90,7 +91,13 @@ logging.basicConfig(filename='wired_exchange.log', encoding='utf-8', level=loggi
 logger = logging.getLogger('main')
 logger.info('--------------------- starting Wired Exchange ---------------------')
 
-# with KucoinClient(host_url=kucoin_host_url) as kucoin:
+notebook_folder = 'D:\\dev\\study\\Study.AlgorithmicTrading\\algorithmic-trading-python\\data'
+
+with KucoinClient(host_url=kucoin_host_url) as kucoin:
+    kucoin.get_transactions(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00')) \
+        .to_json('\\'.join([notebook_folder, 'kucoin_transactions.json'])
+                 , orient='records', date_format='iso')
+shutil.copyfile('\\'.join([notebook_folder, 'kucoin_transactions.json']), 'data/kucoin_transactions.json')
 #     to_json(kucoin.get_transactions(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00')), 'kucoin_transactions-sandbox.json')
 #     to_json(kucoin.get_orders(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00')), 'kucoin_orders-sandbox.json')
 
@@ -99,17 +106,19 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 # tr = tr.astype({'market': 'string', 'baseCurrency': 'string', 'quoteCurrency': 'string', 'type': 'string',
 #                 'side': 'string', 'feeCurrency': 'string', 'liquidity': 'string'})
 
-    # tr = kucoin.get_transactions(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
+# tr = kucoin.get_transactions(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
 with FTXClient() as ftx:
-    ftx.get_transactions().to_json('data/ftx_transactions.json', orient='records', date_format='iso')
-    #     ftx.enrich_usd_prices(tr)
-    # tr.to_json('data/kucoin_transactions.json', orient='records', date_format='iso')
-    # prices = pd.read_json('data/ftx_usd_prices_1h.json')
-    #pd.read_json('Data/kucoin_transactions.json')
+    ftx.get_transactions().to_json('\\'.join([notebook_folder, 'ftx_transactions.json']),
+                                   orient='records', date_format='iso')
+shutil.copyfile('\\'.join([notebook_folder, 'ftx_transactions.json']), 'data/kucoin_transactions.json')
+#     ftx.enrich_usd_prices(tr)
+# tr.to_json('data/kucoin_transactions.json', orient='records', date_format='iso')
+# prices = pd.read_json('data/ftx_usd_prices_1h.json')
+# pd.read_json('Data/kucoin_transactions.json')
 
-tr = read_transactions('data/ftx_transactions.json')
-tr.append(read_transactions('data/kucoin_transactions.json'))
-print(tr)
 
+# tr = read_transactions('data/ftx_transactions.json')
+# tr.append(read_transactions('data/kucoin_transactions.json'))
+# print(tr)
 
 logger.info('--------------------- Wired Exchange stopped ---------------------')

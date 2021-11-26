@@ -91,12 +91,12 @@ class KucoinClient(ExchangeClient):
     #     "createdAt": 1636908982000
     # }
     def _to_transactions(self, fills: dict):
-        tr = DataFrame(fills['data']['items']).rename(columns={'tradeid': 'id'})
+        tr = DataFrame(fills['data']['items'])
         tr['time'] = pd.to_datetime(tr['createdAt'], unit='ms', utc=True)
         tr['base_currency'] = tr['symbol'].apply(lambda s: s.split('-')[0])
         tr['quote_currency'] = tr['symbol'].apply(lambda s: s.split('-')[1])
         tr.rename(
-            columns={'feeCurrency': 'fee_currency'}, inplace=True)
+            columns={'feeCurrency': 'fee_currency', 'tradeid': 'id'}, inplace=True)
         tr.drop(['createdAt', 'symbol', 'forceTaker', 'stop', 'tradeType', 'type', 'funds', 'liquidity'],
                 axis='columns', inplace=True)
         tr['platform'] = self.platform

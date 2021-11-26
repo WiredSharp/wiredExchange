@@ -25,7 +25,7 @@
 # libraries
 
 - python-dotenv
-- python-binance
+- [python-binance](https://python-binance.readthedocs.io/)
 - kucoin-python
 - coingecko-api-client
 

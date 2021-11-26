@@ -113,6 +113,8 @@ class FTXClient(ExchangeClient):
             raise Exception(f'cannot retrieve {base_currency}/{quote_currency} price at {asof_time} from FTX') from ex
 
     def _find_price(self, symbol: str, prices: pd.DataFrame, asof_date: datetime):
+        if symbol == 'USD':
+            return 1.0
         result = prices[(prices.startTime < asof_date) & (prices.base_currency == symbol)].tail(1)['close']
         if result.size == 1:
             return result.iat[0]
