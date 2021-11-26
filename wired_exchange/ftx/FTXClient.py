@@ -24,7 +24,8 @@ def _to_kline(base: str, quote: str, candles: list):
     df['quote_currency'] = quote
     df['startTime'] = pd.to_datetime(df['startTime'])
     df.set_index('startTime')
-    df.astype(dict(open='float', high='float', low='float', close='float', volume='float', time='int'))
+    df.astype(dict(open='float', high='float', low='float', close='float', volume='float', time='int',
+                   base_currency='string', quote_currency='string'))
     return df
 
 
@@ -71,8 +72,10 @@ class FTXClient(ExchangeClient):
                            start_time: Union[datetime, int, float], end_time: Union[datetime, int, float],
                            resolution: int):
         self.open()
-        params = {'start_time': to_timestamp_in_seconds(start_time) if isinstance(start_time, datetime) else int(round(start_time)),
-                  'end_time': to_timestamp_in_seconds(end_time) if isinstance(end_time, datetime) else int(round(end_time)),
+        params = {'start_time': to_timestamp_in_seconds(start_time) if isinstance(start_time, datetime) else int(
+            round(start_time)),
+                  'end_time': to_timestamp_in_seconds(end_time) if isinstance(end_time, datetime) else int(
+                      round(end_time)),
                   'resolution': resolution}
         params['start_time'] -= resolution
         params['end_time'] += resolution
@@ -116,24 +119,52 @@ class FTXClient(ExchangeClient):
         else:
             return np.nan
 
-    def _to_transactions(self, fills: list):
-        tr = pd.DataFrame(fills)
-        tr['platform'] = self.platform
-        tr['time'] = pd.to_datetime(tr['time'])
+    def enrich_usd_prices(self, tr):
+        """retrieve quote and fee currencies usd equivalent"""
         prices = pd.DataFrame()
-        for priceRange in pd.DataFrame(tr[tr['feeCurrency'] != 'USD'].groupby(['feeCurrency']).agg(['min', 'max'])[
-            'time']).append(tr[tr['quoteCurrency'] != 'USD'].groupby(['quoteCurrency']).agg(['min', 'max'])[
-            'time']).itertuples():
+        for priceRange in pd.DataFrame(tr[tr['fee_currency'] != 'USD'].groupby(['fee_currency']).agg(['min', 'max'])[
+                                           'time']).append(
+            tr[tr['quote_currency'] != 'USD'].groupby(['quote_currency']).agg(['min', 'max'])[
+                'time']).itertuples():
             try:
                 prices = prices.append(
                     self.get_prices_history(priceRange.Index, 'USD', priceRange.min, priceRange.max, RESOLUTION))
                 self._logger.info(f'USD prices retrieved for {priceRange.Index}')
             except:
                 self._logger.error(f'unable to retrieve prices for {priceRange.Index}/USD', exc_info=True)
+        tr['price_usd'] = tr.apply(lambda row: self._find_price(row.quote_currency, prices, row.time), axis=1)
+        tr['fee_usd'] = tr.apply(lambda row: self._find_price(row.fee_currency, prices, row.time), axis=1)
+        return tr, prices
 
-        tr['price_usd'] = tr.apply(lambda row: self._find_price(row.baseCurrency, prices, row.time), axis=1)
-        tr['fee_usd'] = tr.apply(lambda row: self._find_price(row.feeCurrency, prices, row.time), axis=1)
-        tr.rename(columns={'baseCurrency': 'base_currency', 'quoteCurrency': 'quote_currency'})
-        tr = tr.astype({'market': 'string', 'baseCurrency': 'string', 'quoteCurrency': 'string', 'type': 'string',
-                        'side': 'string', 'feeCurrency': 'string', 'liquidity': 'string'})
+    # {
+    #     "id": 5025968617,
+    #     "market": "BTC\/USDT",
+    #     "future": null,
+    #     "baseCurrency": "BTC",
+    #     "quoteCurrency": "USDT",
+    #     "type": "order",
+    #     "side": "buy",
+    #     "price": 57882.0,
+    #     "size": 0.0006,
+    #     "orderId": 97286633245.0,
+    #     "time": "2021-11-18T15:25:37.926Z",
+    #     "tradeId": 2494150920.0,
+    #     "feeRate": 0.000665,
+    #     "fee": 0.023094918,
+    #     "feeCurrency": "USDT",
+    #     "liquidity": "taker",
+    #     "platform": "ftx",
+    #     "price_usd": 64189.0,
+    #     "fee_usd": 1.0005
+    # }
+    def _to_transactions(self, fills: list):
+        tr = pd.DataFrame(fills)
+        tr['platform'] = self.platform
+        tr['time'] = pd.to_datetime(tr['time'])
+        tr.rename(
+            columns=dict(baseCurrency='base_currency', quoteCurrency='quote_currency', feeCurrency='fee_currency'), inplace=True)
+        tr.drop(['market', 'future', 'liquidity'], axis='columns', inplace=True)
+        tr = tr.astype(
+            dict(base_currency='string', quote_currency='string', type='string', side='string', fee_currency='string'))
+        self.enrich_usd_prices(tr)
         return tr

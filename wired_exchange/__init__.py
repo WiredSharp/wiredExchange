@@ -57,6 +57,15 @@ def to_timestamp_in_milliseconds(dt) -> int:
     return int(round(dt.timestamp() * 1000))
 
 
+def read_transactions(path_or_buf):
+    tr = pd.read_json(path_or_buf)
+    tr = tr.astype(
+        dict(base_currency='string', quote_currency='string', side='string',
+             fee_currency='string', price='float', size='float', fee='float', platform='string'))
+    tr.set_index('time', inplace=True)
+    tr.sort_index(inplace=True)
+    return tr
+
 class ExchangeClient:
     def __init__(self, platform: str, api_key: str = None, api_secret: str = None,
                  host_url: str = None, always_authenticate: bool = True):
@@ -107,3 +116,4 @@ class ExchangeClient:
 
 
 #from .trades import *
+#from .portfolio import *
