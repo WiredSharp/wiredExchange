@@ -11,22 +11,30 @@ import pandas as pd
 
 import httpx
 
-from wired_exchange import to_timestamp_in_seconds, ExchangeClient
+from wired_exchange.core import to_timestamp_in_seconds, to_klines, to_transactions
+from wired_exchange.core.ExchangeClient import ExchangeClient
 
 from typing import Union
 
 RESOLUTION = 60 * 60
 
 
-def _to_kline(base: str, quote: str, candles: list):
+def _to_klines(base: str, quote: str, candles: list):
     df = pd.DataFrame(candles)
     df['base_currency'] = base
     df['quote_currency'] = quote
-    df['startTime'] = pd.to_datetime(df['startTime'])
-    df.set_index('startTime')
-    df.astype(dict(open='float', high='float', low='float', close='float', volume='float', time='int',
-                   base_currency='string', quote_currency='string'))
-    return df
+    df.drop(['startTime'], axis='columns', inplace=True)
+    return to_klines(df, base, quote)
+
+
+def _find_price(symbol: str, prices: pd.DataFrame, asof_date: datetime):
+    if symbol == 'USD':
+        return 1.0
+    result = prices[(prices.index < asof_date) & (prices.base_currency == symbol)].tail(1)['close']
+    if result.size == 1:
+        return result.iat[0]
+    else:
+        return np.nan
 
 
 class FTXClient(ExchangeClient):
@@ -85,7 +93,7 @@ class FTXClient(ExchangeClient):
             response = self._httpClient.send(request).json()
             if not response['success']:
                 raise Exception('FTX response is not a success')
-            klines = _to_kline(base_currency, quote_currency, response['result'])
+            klines = _to_klines(base_currency, quote_currency, response['result'])
             return klines
 
         except BaseException as ex:
@@ -112,30 +120,26 @@ class FTXClient(ExchangeClient):
         except BaseException as ex:
             raise Exception(f'cannot retrieve {base_currency}/{quote_currency} price at {asof_time} from FTX') from ex
 
-    def _find_price(self, symbol: str, prices: pd.DataFrame, asof_date: datetime):
-        if symbol == 'USD':
-            return 1.0
-        result = prices[(prices.startTime < asof_date) & (prices.base_currency == symbol)].tail(1)['close']
-        if result.size == 1:
-            return result.iat[0]
-        else:
-            return np.nan
-
     def enrich_usd_prices(self, tr):
         """retrieve quote and fee currencies usd equivalent"""
-        prices = pd.DataFrame()
+        prices = None
+        tr.reset_index(inplace=True)
         for priceRange in pd.DataFrame(tr[tr['fee_currency'] != 'USD'].groupby(['fee_currency']).agg(['min', 'max'])[
                                            'time']).append(
             tr[tr['quote_currency'] != 'USD'].groupby(['quote_currency']).agg(['min', 'max'])[
                 'time']).itertuples():
             try:
-                prices = prices.append(
-                    self.get_prices_history(priceRange.Index, 'USD', priceRange.min, priceRange.max, RESOLUTION))
+                new_prices = self.get_prices_history(priceRange.Index, 'USD', priceRange.min, priceRange.max, RESOLUTION)
+                if prices is None:
+                    prices = new_prices
+                else:
+                    prices = prices.append(new_prices)
                 self._logger.info(f'USD prices retrieved for {priceRange.Index}')
             except:
                 self._logger.error(f'unable to retrieve prices for {priceRange.Index}/USD', exc_info=True)
-        tr['price_usd'] = tr.apply(lambda row: self._find_price(row.quote_currency, prices, row.time), axis=1)
-        tr['fee_usd'] = tr.apply(lambda row: self._find_price(row.fee_currency, prices, row.time), axis=1)
+        tr['price_usd'] = tr.apply(lambda row: _find_price(row.quote_currency, prices, row.time), axis=1)
+        tr['fee_usd'] = tr.apply(lambda row: _find_price(row.fee_currency, prices, row.time), axis=1)
+        tr.set_index('time', inplace=True)
         return tr, prices
 
     # {
@@ -164,9 +168,10 @@ class FTXClient(ExchangeClient):
         tr['platform'] = self.platform
         tr['time'] = pd.to_datetime(tr['time'])
         tr.rename(
-            columns=dict(baseCurrency='base_currency', quoteCurrency='quote_currency', feeCurrency='fee_currency'), inplace=True)
+            columns=dict(baseCurrency='base_currency', quoteCurrency='quote_currency',
+                         orderId='order_id', tradeId='trade_id', feeCurrency='fee_currency', feeRate='fee_rate'),
+            inplace=True)
         tr.drop(['market', 'future', 'liquidity'], axis='columns', inplace=True)
-        tr = tr.astype(
-            dict(base_currency='string', quote_currency='string', type='string', side='string', fee_currency='string'))
+        to_transactions(tr)
         self.enrich_usd_prices(tr)
         return tr

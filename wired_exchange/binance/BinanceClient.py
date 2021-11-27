@@ -1,6 +1,8 @@
 import pandas as pd
-from wired_exchange import ExchangeClient
 from binance.client import Client
+
+from wired_exchange.core.ExchangeClient import ExchangeClient
+
 
 class BinanceClient(ExchangeClient):
     def __init__(self, api_key=None, api_secret=None):

@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import time
+from enum import Enum
 from typing import Literal
 from datetime import datetime
 
@@ -9,7 +10,25 @@ import pandas as pd
 from pandas import DataFrame
 
 import httpx
-from wired_exchange import to_timestamp_in_milliseconds, ExchangeClient
+
+from wired_exchange.core import to_timestamp_in_milliseconds, to_transactions
+from wired_exchange.core.ExchangeClient import ExchangeClient
+
+
+class CandleStickResolution(Enum):
+    _1min = '1min'
+    _3min = '3min'
+    _5min = '5min'
+    _15min = '15min'
+    _30min = '30min'
+    _1hour = '1hour'
+    _2hour = '2hour'
+    _4hour = '4hour'
+    _6hour = '6hour'
+    _8hour = '8hour'
+    _12hour = '12hour'
+    _1day = '1day'
+    _1week = '1week'
 
 
 class KucoinClient(ExchangeClient):
@@ -59,10 +78,7 @@ class KucoinClient(ExchangeClient):
         params = {'tradeType': 'MARGIN_TRADE' if trade_type.lower() == 'margin' else 'TRADE'}
         if status is not None:
             params['status'] = status
-        if start_time is not None:
-            params['startAt'] = to_timestamp_in_milliseconds(start_time)
-        if end_time is not None:
-            params['endAt'] = to_timestamp_in_milliseconds(end_time)
+        self.add_date_range_params(params, start_time, end_time)
         try:
             request = self._httpClient.build_request('GET', '/v1/orders', params=params)
             self._authenticate(request)
@@ -71,6 +87,25 @@ class KucoinClient(ExchangeClient):
         except httpx.HTTPStatusError as ex:
             self._logger.error('cannot retrieve transactions from Kucoin', ex)
 
+    def add_date_range_params(self, params, start_time, end_time):
+        if start_time is not None:
+            params['startAt'] = to_timestamp_in_milliseconds(start_time)
+        if end_time is not None:
+            params['endAt'] = to_timestamp_in_milliseconds(end_time)
+        return params
+
+    def get_prices(self, base: str, quote: str, resolution: CandleStickResolution, start_time=None, end_time=None):
+        self.open()
+        # For each query, the system would return at most **1500** pieces of data. To obtain more data, please page
+        # the data by time.
+        params = dict(symbol=f'{base}-{quote}', type=resolution.value)
+        self.add_date_range_params(params, start_time, end_time)
+        try:
+            request = self._httpClient.build_request('GET', '/v1/market/candles', params=params)
+            response = self._httpClient.send(request)
+            return response.json()
+        except httpx.HTTPStatusError as ex:
+            self._logger.error('cannot retrieve transactions from Kucoin', ex)
     # {
     #     "symbol": "CAKE-USDT",
     #     "tradeId": "61913fb6674fa9563b3c76fe",
@@ -90,17 +125,30 @@ class KucoinClient(ExchangeClient):
     #     "type": "limit",
     #     "createdAt": 1636908982000
     # }
+
     def _to_transactions(self, fills: dict):
         tr = DataFrame(fills['data']['items'])
         tr['time'] = pd.to_datetime(tr['createdAt'], unit='ms', utc=True)
         tr['base_currency'] = tr['symbol'].apply(lambda s: s.split('-')[0])
         tr['quote_currency'] = tr['symbol'].apply(lambda s: s.split('-')[1])
         tr.rename(
-            columns={'feeCurrency': 'fee_currency', 'tradeid': 'id'}, inplace=True)
-        tr.drop(['createdAt', 'symbol', 'forceTaker', 'stop', 'tradeType', 'type', 'funds', 'liquidity'],
+            columns=dict(feeCurrency='fee_currency', tradeId='trade_id', orderId='order_id',
+                         counterOrderId='counter_order_id', feeRate='fee_rate'), inplace=True)
+        tr.drop(['createdAt', 'symbol', 'forceTaker', 'stop', 'tradeType', 'funds', 'liquidity'],
                 axis='columns', inplace=True)
         tr['platform'] = self.platform
-        tr = tr.astype(
-            dict(base_currency='string', quote_currency='string', side='string',
-                 fee_currency='string', price='float', size='float', fee='float', platform='string'))
-        return tr
+        return to_transactions(tr)
+
+    # [
+    #     [
+    #         "1545904980",             //Start time of the candle cycle
+    #         "0.058",                  //opening price
+    #         "0.049",                  //closing price
+    #         "0.058",                  //highest price
+    #         "0.049",                  //lowest price
+    #         "0.018",                  //Transaction volume
+    #         "0.000945"                //Transaction amount
+    #     ]
+    # ]
+    def _to_klines(self, candles: dict):
+        pr = DataFrame(candles)
