@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 import logging
 from logging.config import fileConfig
 
-import numpy as np
 import tzlocal
 from dotenv import load_dotenv
 from datetime import datetime
@@ -114,8 +113,10 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 # tr.append(read_transactions('data/kucoin_transactions.json'))
 # print(tr)
 
-import_transactions('EBL')
+# import_transactions('EBL')
 with KucoinClient() as kucoin:
-    print(kucoin.get_prices('BTC', 'USDT', CandleStickResolution._1min, start_time=datetime.fromisoformat('2021-11-27T21:53:00+01:00')))
+    print(kucoin.get_prices('BTC', 'USDT', CandleStickResolution._1min,
+                            start_time=datetime.fromisoformat('2021-11-27T21:53:00+01:00'),
+                            end_time=datetime.fromisoformat('2021-11-28T00:53:00+01:00')))
 
 logger.info('--------------------- Wired Exchange stopped ---------------------')

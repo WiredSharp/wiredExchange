@@ -11,7 +11,7 @@ from pandas import DataFrame
 
 import httpx
 
-from wired_exchange.core import to_timestamp, to_transactions
+from wired_exchange.core import to_timestamp, to_transactions, to_klines
 from wired_exchange.core.ExchangeClient import ExchangeClient
 
 
@@ -100,8 +100,10 @@ class KucoinClient(ExchangeClient):
         self.add_date_range_params(params, start_time, end_time, 's')
         try:
             request = self._httpClient.build_request('GET', '/v1/market/candles', params=params)
-            response = self._httpClient.send(request)
-            return response.json()
+            response = self._httpClient.send(request).json()
+            if not response['code'].startswith('200'):
+                raise RuntimeError(f'{response["code"]}: response code does not indicate a success')
+            return self._to_klines(response['data'], base, quote)
         except httpx.HTTPStatusError as ex:
             self._logger.error('cannot retrieve transactions from Kucoin', ex)
 
@@ -149,5 +151,8 @@ class KucoinClient(ExchangeClient):
     #         "0.000945"                //Transaction amount
     #     ]
     # ]
-    def _to_klines(self, candles: dict):
-        pr = DataFrame(candles)
+    def _to_klines(self, candles: dict, base: str, quote: str):
+        tr = pd.DataFrame(candles, columns=['time', 'open', 'close', 'high', 'low', 'volume', 'amount'])
+        tr.drop(['amount'], inplace=True, axis='columns')
+        tr['time'] = pd.to_numeric(tr['time']) * 1000
+        return to_klines(tr, base, quote)
