@@ -1,6 +1,6 @@
 import pandas as pd
 
-from wired_exchange import FTXClient, KucoinClient, WiredStorage
+from wired_exchange import FTXClient, KucoinClient, WiredStorage, to_transactions
 
 
 class Portfolio:
@@ -19,7 +19,13 @@ class Portfolio:
         return tr
 
     def append_transactions(self, transactions: pd.DataFrame):
-        raise NotImplementedError('TODO')
+        self._db.save_transactions(transactions)
+        return self
 
     def get_transaction(self):
-        return self._db.read_transactions()
+        tr = self._db.read_transactions()
+        tr['time'] = pd.to_datetime(tr['time'])
+        return to_transactions(tr)
+
+    def get_positions(self):
+        tr = self.get_transaction()

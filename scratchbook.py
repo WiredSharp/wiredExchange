@@ -131,13 +131,14 @@ db = WiredStorage('EBL')
 #
 # tr.to_json('data/ebr_transactions.json', orient='index', date_format='iso')
 
-tr = read_transactions('data/ebr_transactions.json')
+# tr = read_transactions('data/ebr_transactions.json')
 
 # tr = db.read_transactions()
 # tr.to_json('data/ebr_transactions.json', orient='index', date_format='iso')
-db.save_transactions(tr)
+# db.save_transactions(tr)
 
-# wallet = Portfolio('EBL')
+wallet = Portfolio('EBL')
+wallet.get_transaction().to_json('data/ebr_wallet_transactions.json', orient='index', date_format='iso')
 # print(wallet.get_transaction())
 
 logger.info('--------------------- Wired Exchange stopped ---------------------')

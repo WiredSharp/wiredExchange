@@ -45,7 +45,7 @@ class WiredStorage:
                                  Column('price', FLOAT),
                                  Column('size', FLOAT),
                                  Column('order_id', NVARCHAR(25)),
-                                 Column('time', TIMESTAMP),
+                                 Column('time', String),
                                  Column('trade_id', NVARCHAR(25)),
                                  Column('fee_rate', FLOAT),
                                  Column('fee', FLOAT),
@@ -63,8 +63,7 @@ class WiredStorage:
 
     def read_transactions(self):
         self.open()
-        return pd.read_sql_table('TRANSACTIONS', self.__db, index_col='id',
-                                 parse_dates=['time'])
+        return pd.read_sql_table('TRANSACTIONS', self.__db, index_col='id')
 
 
 def _get_unicode_name(name):
