@@ -56,7 +56,8 @@ class KucoinClient(ExchangeClient):
         request.headers['KC-API-PASSPHRASE'] = passphrase.decode('utf-8')
         request.headers['KC-API-KEY-VERSION'] = "2"
 
-    def get_transactions(self, start_time, end_time=None, trade_type: Literal['spot', 'margin'] = 'spot'):
+    def get_transactions(self, start_time, end_time=None,
+                         trade_type: Literal['spot', 'margin'] = 'spot') -> pd.DataFrame:
         self.open()
         params = {'tradeType': 'MARGIN_TRADE' if trade_type.lower() == 'margin' else 'TRADE'}
         self.add_date_range_params(params, start_time, end_time, 'ms')
@@ -83,7 +84,7 @@ class KucoinClient(ExchangeClient):
         except httpx.HTTPStatusError as ex:
             self._logger.error('cannot retrieve transactions from Kucoin', ex)
 
-    def add_date_range_params(self, params, start_time, end_time, precision):
+    def add_date_range_params(self, params: dict, start_time, end_time, precision) -> dict:
         if start_time is not None:
             params['startAt'] = to_timestamp(start_time, precision) if isinstance(start_time, datetime) else int(
                 round(start_time))
@@ -92,7 +93,8 @@ class KucoinClient(ExchangeClient):
                 round(end_time))
         return params
 
-    def get_prices(self, base: str, quote: str, resolution: CandleStickResolution, start_time=None, end_time=None):
+    def get_prices_history(self, base: str, quote: str,
+                           resolution: CandleStickResolution, start_time=None, end_time=None) -> pd.DataFrame:
         self.open()
         # For each query, the system would return at most **1500** pieces of data. To obtain more data, please page
         # the data by time.
@@ -127,7 +129,7 @@ class KucoinClient(ExchangeClient):
     #     "createdAt": 1636908982000
     # }
 
-    def _to_transactions(self, fills: dict):
+    def _to_transactions(self, fills: dict) -> pd.DataFrame:
         tr = DataFrame(fills['data']['items'])
         tr['time'] = pd.to_datetime(tr['createdAt'], unit='ms', utc=True)
         tr['base_currency'] = tr['symbol'].apply(lambda s: s.split('-')[0])
@@ -151,7 +153,7 @@ class KucoinClient(ExchangeClient):
     #         "0.000945"                //Transaction amount
     #     ]
     # ]
-    def _to_klines(self, candles: dict, base: str, quote: str):
+    def _to_klines(self, candles: dict, base: str, quote: str) -> pd.DataFrame:
         tr = pd.DataFrame(candles, columns=['time', 'open', 'close', 'high', 'low', 'volume', 'amount'])
         tr.drop(['amount'], inplace=True, axis='columns')
         tr['time'] = pd.to_numeric(tr['time']) * 1000

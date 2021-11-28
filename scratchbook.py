@@ -114,9 +114,9 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 # print(tr)
 
 # import_transactions('EBL')
-with KucoinClient() as kucoin:
-    print(kucoin.get_prices('BTC', 'USDT', CandleStickResolution._1min,
-                            start_time=datetime.fromisoformat('2021-11-27T21:53:00+01:00'),
-                            end_time=datetime.fromisoformat('2021-11-28T00:53:00+01:00')))
+# with KucoinClient() as kucoin:
+#     print(kucoin.get_prices('BTC', 'USDT', CandleStickResolution._1min,
+#                             start_time=datetime.fromisoformat('2021-11-27T21:53:00+01:00'),
+#                             end_time=datetime.fromisoformat('2021-11-28T00:53:00+01:00')))
 
 logger.info('--------------------- Wired Exchange stopped ---------------------')

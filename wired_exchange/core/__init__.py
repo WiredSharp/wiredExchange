@@ -31,7 +31,7 @@ def merge(a, b, path=None):
             a[key] = b[key]
     return a
 
-def to_timestamp(dt, resolution):
+def to_timestamp(dt, resolution) -> int:
     return to_timestamp_in_seconds(dt) if resolution == 's' else to_timestamp_in_milliseconds(dt)
 
 def to_timestamp_in_seconds(dt) -> int:
@@ -42,12 +42,12 @@ def to_timestamp_in_milliseconds(dt) -> int:
     return int(round(dt.timestamp() * 1000))
 
 
-def read_transactions(path_or_buf):
+def read_transactions(path_or_buf) -> pd.DataFrame:
     tr = pd.read_json(path_or_buf)
     return to_transactions(tr)
 
 
-def to_transactions(tr):
+def to_transactions(tr) -> pd.DataFrame:
     tr = tr.astype(
         dict(base_currency='string', quote_currency='string', side='string',
              fee_currency='string', price='float', size='float', fee='float', platform='string'))
@@ -56,11 +56,11 @@ def to_transactions(tr):
     return tr
 
 
-def read_klines(path_or_buf, base: str = None, quote: str = None):
+def read_klines(path_or_buf, base: str = None, quote: str = None) -> pd.DataFrame:
     return to_klines(pd.read_json(path_or_buf), base, quote)
 
 
-def to_klines(pr, base: str = None, quote: str = None):
+def to_klines(pr, base: str = None, quote: str = None) -> pd.DataFrame:
     if (base is not None) and ('base_currency' not in pr.columns):
         pr['base_currency'] = base
     if (quote is not None) and ('quote_currency' not in pr.columns):

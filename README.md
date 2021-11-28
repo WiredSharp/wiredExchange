@@ -1,16 +1,21 @@
 # crypto exchange BOT SDK
 
 - [ ] Retrieves market prices form various exchange in a homogeneous way
-  - [ ] [FTX](https://docs.ftx.com/?python#rest-api)
-  - [ ] [Kucoin](https://docs.kucoin.com/#general)
+  - [X] [FTX](https://docs.ftx.com/?python#rest-api)
+  - [X] [Kucoin](https://docs.kucoin.com/#general)
   - [ ] [Binance](https://binance-docs.github.io/apidocs)
   - [ ] [BitPanda](https://developers.bitpanda.com/platform/)
 - [ ] Retrieve portfolio information
   - [X] transactions history
+    - [X] [FTX](https://docs.ftx.com/?python#rest-api)
+    - [X] [Kucoin](https://docs.kucoin.com/#general)
+    - [ ] [Binance](https://binance-docs.github.io/apidocs)
+    - [ ] [BitPanda](https://developers.bitpanda.com/platform/)
   - [ ] Open orders
-  - [ ] sources
-    - [X] FTX
-    - [ ] Kucoin
+    - [ ] [FTX](https://docs.ftx.com/?python#rest-api)
+    - [ ] [Kucoin](https://docs.kucoin.com/#general)
+    - [ ] [Binance](https://binance-docs.github.io/apidocs)
+    - [ ] [BitPanda](https://developers.bitpanda.com/platform/)
 - [ ] Defines a data model 
   - [X] for transactions
   - [X] for market data
