@@ -31,6 +31,8 @@ def merge(a, b, path=None):
             a[key] = b[key]
     return a
 
+def to_timestamp(dt, resolution):
+    return to_timestamp_in_seconds(dt) if resolution == 's' else to_timestamp_in_milliseconds(dt)
 
 def to_timestamp_in_seconds(dt) -> int:
     return int(round(dt.timestamp()))

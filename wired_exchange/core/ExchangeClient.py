@@ -5,18 +5,6 @@ import httpx
 
 from wired_exchange.core import VERSION, config
 
-_logger = logging.getLogger(__name__)
-
-
-def _log_request(request):
-    _logger.debug(request.headers)
-    _logger.debug(f"Request event hook: {request.method} {request.url} - Waiting for response")
-
-
-def log_response(response):
-    request = response.request
-    _logger.debug(f"Response event hook: {request.method} {request.url} - Status {response.status_code}")
-
 
 def raise_on_4xx_5xx(response):
     response.raise_for_status()
@@ -49,10 +37,10 @@ class ExchangeClient:
         if self._httpClient is None:
             self._httpClient = httpx.Client(base_url=self.host_url,
                                             event_hooks={
-                                                'request': [_log_request,
+                                                'request': [self._log_request,
                                                             self._authenticate] if self.always_authenticate else [
-                                                    _log_request],
-                                                'response': [log_response, raise_on_4xx_5xx]},
+                                                    self._log_request],
+                                                'response': [self._log_response, raise_on_4xx_5xx]},
                                             headers={'Accept': 'application/json',
                                                      "User-Agent": "wired_exchange/" + VERSION})
             self._logger.debug(f'instantiate http client for {self}')
@@ -69,3 +57,11 @@ class ExchangeClient:
 
     def __str__(self):
         return f'{self.platform} exchange client'
+
+    def _log_request(self, request):
+        self._logger.debug(request.headers)
+        self._logger.debug(f"Request event hook: {request.method} {request.url} - Waiting for response")
+
+    def _log_response(self, response):
+        request = response.request
+        self._logger.debug(f"Response event hook: {request.method} {request.url} - Status {response.status_code}")

@@ -11,7 +11,7 @@ from pandas import DataFrame
 
 import httpx
 
-from wired_exchange.core import to_timestamp_in_milliseconds, to_transactions
+from wired_exchange.core import to_timestamp, to_transactions
 from wired_exchange.core.ExchangeClient import ExchangeClient
 
 
@@ -58,12 +58,8 @@ class KucoinClient(ExchangeClient):
 
     def get_transactions(self, start_time, end_time=None, trade_type: Literal['spot', 'margin'] = 'spot'):
         self.open()
-        params = {'tradeType': 'MARGIN_TRADE' if trade_type.lower() == 'margin' else 'TRADE',
-                  'startAt': to_timestamp_in_milliseconds(start_time) if isinstance(start_time, datetime) else int(
-            round(start_time))}
-        if end_time is not None:
-            params['endAt'] = to_timestamp_in_milliseconds(end_time) if isinstance(end_time, datetime) else int(
-            round(end_time))
+        params = {'tradeType': 'MARGIN_TRADE' if trade_type.lower() == 'margin' else 'TRADE'}
+        self.add_date_range_params(params, start_time, end_time, 'ms')
         try:
             request = self._httpClient.build_request('GET', '/v1/fills', params=params)
             self._authenticate(request)
@@ -87,11 +83,13 @@ class KucoinClient(ExchangeClient):
         except httpx.HTTPStatusError as ex:
             self._logger.error('cannot retrieve transactions from Kucoin', ex)
 
-    def add_date_range_params(self, params, start_time, end_time):
+    def add_date_range_params(self, params, start_time, end_time, precision):
         if start_time is not None:
-            params['startAt'] = to_timestamp_in_milliseconds(start_time)
+            params['startAt'] = to_timestamp(start_time, precision) if isinstance(start_time, datetime) else int(
+                round(start_time))
         if end_time is not None:
-            params['endAt'] = to_timestamp_in_milliseconds(end_time)
+            params['endAt'] = to_timestamp(end_time, precision) if isinstance(end_time, datetime) else int(
+                round(end_time))
         return params
 
     def get_prices(self, base: str, quote: str, resolution: CandleStickResolution, start_time=None, end_time=None):
@@ -99,13 +97,14 @@ class KucoinClient(ExchangeClient):
         # For each query, the system would return at most **1500** pieces of data. To obtain more data, please page
         # the data by time.
         params = dict(symbol=f'{base}-{quote}', type=resolution.value)
-        self.add_date_range_params(params, start_time, end_time)
+        self.add_date_range_params(params, start_time, end_time, 's')
         try:
             request = self._httpClient.build_request('GET', '/v1/market/candles', params=params)
             response = self._httpClient.send(request)
             return response.json()
         except httpx.HTTPStatusError as ex:
             self._logger.error('cannot retrieve transactions from Kucoin', ex)
+
     # {
     #     "symbol": "CAKE-USDT",
     #     "tradeId": "61913fb6674fa9563b3c76fe",
