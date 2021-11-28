@@ -123,7 +123,6 @@ class FTXClient(ExchangeClient):
     def enrich_usd_prices(self, tr):
         """retrieve quote and fee currencies usd equivalent"""
         prices = None
-        tr.reset_index(inplace=True)
         for priceRange in pd.DataFrame(tr[tr['fee_currency'] != 'USD'].groupby(['fee_currency']).agg(['min', 'max'])[
                                            'time']).append(
             tr[tr['quote_currency'] != 'USD'].groupby(['quote_currency']).agg(['min', 'max'])[
@@ -137,9 +136,8 @@ class FTXClient(ExchangeClient):
                 self._logger.info(f'USD prices retrieved for {priceRange.Index}')
             except:
                 self._logger.error(f'unable to retrieve prices for {priceRange.Index}/USD', exc_info=True)
-        tr['price_usd'] = tr.apply(lambda row: _find_price(row.quote_currency, prices, row.time), axis=1)
-        tr['fee_usd'] = tr.apply(lambda row: _find_price(row.fee_currency, prices, row.time), axis=1)
-        tr.set_index('time', inplace=True)
+        tr['price_usd'] = tr.apply(lambda row: _find_price(row.quote_currency, prices, row.time), axis='columns')
+        tr['fee_usd'] = tr.apply(lambda row: _find_price(row.fee_currency, prices, row.time), axis='columns')
         return tr, prices
 
     # {
@@ -169,9 +167,12 @@ class FTXClient(ExchangeClient):
         tr['time'] = pd.to_datetime(tr['time'])
         tr.rename(
             columns=dict(baseCurrency='base_currency', quoteCurrency='quote_currency',
-                         orderId='order_id', tradeId='trade_id', feeCurrency='fee_currency', feeRate='fee_rate'),
+                         orderId='order_id', tradeId='trade_id', feeCurrency='fee_currency',
+                         feeRate='fee_rate', id='fill_id'),
             inplace=True)
-        tr.drop(['market', 'future', 'liquidity'], axis='columns', inplace=True)
-        to_transactions(tr)
+        tr.astype(dict(order_id='string', trade_id='string', fill_id='string'))
+        tr['id'] = tr['fill_id'].apply(lambda id: f'{self.platform}_{id}')
+        tr.drop(['market', 'future', 'liquidity', 'fill_id'], axis='columns', inplace=True)
+        tr = to_transactions(tr)
         self.enrich_usd_prices(tr)
         return tr

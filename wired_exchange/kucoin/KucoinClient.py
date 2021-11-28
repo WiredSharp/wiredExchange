@@ -137,9 +137,12 @@ class KucoinClient(ExchangeClient):
         tr.rename(
             columns=dict(feeCurrency='fee_currency', tradeId='trade_id', orderId='order_id',
                          counterOrderId='counter_order_id', feeRate='fee_rate'), inplace=True)
-        tr.drop(['createdAt', 'symbol', 'forceTaker', 'stop', 'tradeType', 'funds', 'liquidity'],
+        tr.drop(['createdAt', 'symbol', 'forceTaker', 'stop', 'tradeType',
+                 'funds', 'liquidity', 'counter_order_id'],
                 axis='columns', inplace=True)
+        tr.astype(dict(order_id='string', trade_id='string'))
         tr['platform'] = self.platform
+        tr['id'] = tr['trade_id'].apply(lambda id: f'{self.platform}_{id}')
         return to_transactions(tr)
 
     # [

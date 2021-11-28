@@ -42,8 +42,8 @@ def to_timestamp_in_milliseconds(dt) -> int:
     return int(round(dt.timestamp() * 1000))
 
 
-def read_transactions(path_or_buf) -> pd.DataFrame:
-    tr = pd.read_json(path_or_buf)
+def read_transactions(path_or_buf, orient='index') -> pd.DataFrame:
+    tr = pd.read_json(path_or_buf, orient=orient)
     return to_transactions(tr)
 
 
@@ -51,8 +51,8 @@ def to_transactions(tr) -> pd.DataFrame:
     tr = tr.astype(
         dict(base_currency='string', quote_currency='string', side='string',
              fee_currency='string', price='float', size='float', fee='float', platform='string'))
-    tr.set_index('time', inplace=True)
-    tr.sort_index(inplace=True)
+    if 'id' in tr.columns:
+        tr.set_index('id', inplace=True)
     return tr
 
 

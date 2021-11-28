@@ -19,6 +19,7 @@
 - [ ] Defines a data model 
   - [X] for transactions
   - [X] for market data
+  - [ ] for positions
   - [ ] for orders
 - [ ] Crypto data
   - [ ] PnL
