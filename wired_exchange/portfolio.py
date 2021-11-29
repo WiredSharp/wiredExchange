@@ -28,4 +28,16 @@ class Portfolio:
         return to_transactions(tr)
 
     def get_positions(self):
+        with FTXClient() as ftx:
+            tr = ftx.get_balances()
+        with KucoinClient() as kucoin:
+            tr = tr.append(kucoin.get_balances())
+        return tr
+
+    def get_average_buy_prices(self):
         tr = self.get_transaction()
+        buy_trs = tr['side'] == 'buy'
+        orders = tr['type'].isin(['order', 'limit'])
+        tr['amount_usd'] = tr['size'] * tr['price'] * tr['price_usd']
+        byCurrency = tr[buy_trs & orders].groupby('base_currency')
+        return byCurrency['amount_usd'].sum() / byCurrency['size'].sum()

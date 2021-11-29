@@ -161,3 +161,24 @@ class KucoinClient(ExchangeClient):
         tr.drop(['amount'], inplace=True, axis='columns')
         tr['time'] = pd.to_numeric(tr['time']) * 1000
         return to_klines(tr, base, quote)
+
+    def get_balances(self):
+        self.open()
+        try:
+            request = self._httpClient.build_request('GET', '/v1/accounts')
+            self._authenticate(request)
+            response = self._httpClient.send(request).json()
+            if not response['code'].startswith('200'):
+                raise RuntimeError(f'{response["code"]}: response code does not indicate a success')
+            return self._to_balances(response['data'])
+        except httpx.HTTPStatusError as ex:
+            self._logger.error('cannot retrieve accounts list from Kucoin', ex)
+
+    def _to_balances(self, balances_json: dict):
+        balances = pd.DataFrame(balances_json).groupby('currency').sum()
+        balances.rename(columns=dict(balance='total'), inplace=True)
+        balances.drop(columns=['id', 'type', 'holds'], inplace=True)
+        balances['total'] = pd.to_numeric(balances['total'])
+        balances['available'] = pd.to_numeric(balances['available'])
+        balances['platform'] = self.platform
+        return balances

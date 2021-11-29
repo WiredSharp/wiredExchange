@@ -13,6 +13,8 @@ import pandas as pd
 import sqlalchemy
 from kucoin.client import Market
 
+import xlsxwriter
+
 from wired_exchange import import_transactions, WiredStorage
 from wired_exchange.core import read_transactions
 from wired_exchange.ftx.FTXClient import FTXClient
@@ -121,8 +123,12 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 #                             start_time=datetime.fromisoformat('2021-11-27T21:53:00+01:00'),
 #                             end_time=datetime.fromisoformat('2021-11-28T00:53:00+01:00')))
 
-db = WiredStorage('EBL')
+# db = WiredStorage('EBL')
 # with FTXClient() as ftx:
+#     ftx.get_balances().to_json('data/ftx_balances.json', orient='index', date_format='iso')
+#
+# with KucoinClient() as kucoin:
+#     print(kucoin.get_balances())
 #     tr = ftx.get_transactions()
 #     with KucoinClient() as kucoin:
 #         kucoin_tr, _ = ftx.enrich_usd_prices(
@@ -138,7 +144,11 @@ db = WiredStorage('EBL')
 # db.save_transactions(tr)
 
 wallet = Portfolio('EBL')
-wallet.get_transaction().to_json('data/ebr_wallet_transactions.json', orient='index', date_format='iso')
+print(wallet.get_average_buy_prices())
+# tr = wallet.get_transaction()
+# tr['time']=tr['time'].astype('string')
+# wallet.get_transaction().to_json('data/ebr_wallet_transactions.json', orient='index', date_format='iso')
+# tr.to_excel('data/ebr_wallet_transactions.xlsx', engine='xlsxwriter')
 # print(wallet.get_transaction())
 
 logger.info('--------------------- Wired Exchange stopped ---------------------')

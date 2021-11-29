@@ -100,6 +100,7 @@ class FTXClient(ExchangeClient):
             raise Exception(
                 f'cannot retrieve {base_currency}/{quote_currency} price between {start_time} and {end_time} from FTX') from ex
 
+
     def resolve_price(self, asof_time: Union[datetime, int, float], base_currency: str, quote_currency: str):
         self.open()
         window_size = 15
@@ -176,3 +177,33 @@ class FTXClient(ExchangeClient):
         tr = to_transactions(tr)
         self.enrich_usd_prices(tr)
         return tr
+
+    def get_balances(self):
+        self.open()
+        try:
+            request = self._httpClient.build_request('GET', '/wallet/balances')
+            response = self._httpClient.send(request).json()
+            if not response['success']:
+                raise Exception('FTX response is not a success')
+            return self._to_balances(response['result'])
+
+        except BaseException as ex:
+            raise Exception(
+                f'cannot retrieve positions from FTX') from ex
+
+    #  {
+    #     "coin": "ETH",
+    #     "total": 0.0899829,
+    #     "free": 0.3212904,
+    #     "availableWithoutBorrow": 0.0899829,
+    #     "usdValue": 399.7430372727522,
+    #     "spotBorrow": 0.0
+    #   }
+    def _to_balances(self, balances_json: dict):
+        balances = pd.DataFrame(balances_json)
+        balances = balances[balances['total'] > 0]
+        balances.rename(columns=dict(availableWithoutBorrow='available', coin='currency'), inplace=True)
+        balances.drop(columns=['free', 'usdValue', 'spotBorrow'], inplace=True)
+        balances.set_index('currency', inplace=True)
+        balances['platform'] = self.platform
+        return balances
