@@ -1,4 +1,5 @@
 import base64
+import functools
 import hashlib
 import hmac
 import time
@@ -60,12 +61,12 @@ class KucoinClient(ExchangeClient):
                          trade_type: Literal['spot', 'margin'] = 'spot') -> pd.DataFrame:
         self.open()
         params = {'tradeType': 'MARGIN_TRADE' if trade_type.lower() == 'margin' else 'TRADE'}
-        self.add_date_range_params(params, start_time, end_time, 'ms')
+        self._add_date_range_params(params, start_time, end_time, 'ms')
         try:
             request = self._httpClient.build_request('GET', '/v1/fills', params=params)
             self._authenticate(request)
-            response = self._httpClient.send(request)
-            return self._to_transactions(response.json())
+            response = self._read_pages('/v1/fills', params, authenticated=True)
+            return self._to_transactions(response)
         except httpx.HTTPStatusError as ex:
             self._logger.error('cannot retrieve transactions from Kucoin', ex)
 
@@ -75,7 +76,7 @@ class KucoinClient(ExchangeClient):
         params = {'tradeType': 'MARGIN_TRADE' if trade_type.lower() == 'margin' else 'TRADE'}
         if status is not None:
             params['status'] = status
-        self.add_date_range_params(params, start_time, end_time)
+        self._add_date_range_params(params, start_time, end_time)
         try:
             request = self._httpClient.build_request('GET', '/v1/orders', params=params)
             self._authenticate(request)
@@ -84,22 +85,13 @@ class KucoinClient(ExchangeClient):
         except httpx.HTTPStatusError as ex:
             self._logger.error('cannot retrieve transactions from Kucoin', ex)
 
-    def add_date_range_params(self, params: dict, start_time, end_time, precision) -> dict:
-        if start_time is not None:
-            params['startAt'] = to_timestamp(start_time, precision) if isinstance(start_time, datetime) else int(
-                round(start_time))
-        if end_time is not None:
-            params['endAt'] = to_timestamp(end_time, precision) if isinstance(end_time, datetime) else int(
-                round(end_time))
-        return params
-
     def get_prices_history(self, base: str, quote: str,
                            resolution: CandleStickResolution, start_time=None, end_time=None) -> pd.DataFrame:
         self.open()
         # For each query, the system would return at most **1500** pieces of data. To obtain more data, please page
         # the data by time.
         params = dict(symbol=f'{base}-{quote}', type=resolution.value)
-        self.add_date_range_params(params, start_time, end_time, 's')
+        self._add_date_range_params(params, start_time, end_time, 's')
         try:
             request = self._httpClient.build_request('GET', '/v1/market/candles', params=params)
             response = self._httpClient.send(request).json()
@@ -130,7 +122,9 @@ class KucoinClient(ExchangeClient):
     # }
 
     def _to_transactions(self, fills: dict) -> pd.DataFrame:
-        tr = DataFrame(fills['data']['items'])
+        tr = DataFrame(fills)
+        if tr.size == 0:
+            return tr
         tr['time'] = pd.to_datetime(tr['createdAt'], unit='ms', utc=True)
         tr['base_currency'] = tr['symbol'].apply(lambda s: s.split('-')[0])
         tr['quote_currency'] = tr['symbol'].apply(lambda s: s.split('-')[1])
@@ -158,6 +152,8 @@ class KucoinClient(ExchangeClient):
     # ]
     def _to_klines(self, candles: dict, base: str, quote: str) -> pd.DataFrame:
         tr = pd.DataFrame(candles, columns=['time', 'open', 'close', 'high', 'low', 'volume', 'amount'])
+        if tr.size == 0:
+            return tr
         tr.drop(['amount'], inplace=True, axis='columns')
         tr['time'] = pd.to_numeric(tr['time']) * 1000
         return to_klines(tr, base, quote)
@@ -176,9 +172,87 @@ class KucoinClient(ExchangeClient):
 
     def _to_balances(self, balances_json: dict):
         balances = pd.DataFrame(balances_json).groupby('currency').sum()
+        if balances.size == 0:
+            return balances
         balances.rename(columns=dict(balance='total'), inplace=True)
         balances.drop(columns=['id', 'type', 'holds'], inplace=True)
         balances['total'] = pd.to_numeric(balances['total'])
         balances['available'] = pd.to_numeric(balances['available'])
         balances['platform'] = self.platform
         return balances
+
+
+    def get_account_operations(self, start_time=None, end_time=None) -> pd.DataFrame:
+        self.open()
+        params = {}
+        self._add_date_range_params(params, start_time, end_time, 'ms')
+        try:
+            columns = ['amount', 'currency',
+                   'status', 'createdAt', 'updatedAt', 'walletTxId']
+            result = self._read_pages('/v1/deposits', params, authenticated=True)
+            deposits = pd.DataFrame(result, columns=columns)
+            deposits['type'] = 'deposit'
+            result = self._read_pages('/v1/withdrawals', params, authenticated=True)
+            withdrawals = pd.DataFrame(result, columns=columns)
+            withdrawals['type'] = 'withdrawal'
+            return self._to_account_operations(deposits, withdrawals)
+        except httpx.HTTPStatusError as ex:
+            self._logger.error('cannot retrieve transactions from Kucoin', ex)
+
+    def _to_account_operations(self, deposits, withdrawals):
+        operations = deposits.append(withdrawals, ignore_index=True)
+        operations['updatedAt'] = pd.to_datetime(operations['updatedAt'], unit='ms', utc=True)
+        operations['platform'] = self.platform
+        return operations
+
+
+    def get_orders_v1(self, symbol=None, start_time=None, end_time=None) -> pd.DataFrame:
+        self.open()
+        params = dict(pageSize=200)
+        if symbol is not None:
+            params['symbol'] = symbol
+        self._add_date_range_params(params, start_time, end_time, 'ms')
+        try:
+            return self._read_pages('/v1/hist-orders', params, authenticated=True)
+        except httpx.HTTPStatusError as ex:
+            self._logger.error('cannot retrieve transactions from Kucoin', ex)
+
+    def _read_pages(self, path, params, authenticated, aggregated=True):
+        pages = self._get_pages(path, params, authenticated)
+        if aggregated:
+            return self._aggregate_pages(pages)
+        else:
+            return pages
+
+    def _get_pages(self, path: str, params: dict, authenticated: bool = False):
+        remaining_pages = True
+        params['current_page'] = 0
+        while remaining_pages:
+            params['current_page'] += 1
+            request = self._httpClient.build_request('GET', path, params=params)
+            if authenticated:
+                self._authenticate(request)
+            response = self._httpClient.send(request)
+            json = response.json()
+            total_pages = json['data']['totalPage']
+            remaining_pages = params['current_page'] < total_pages
+            if json['data']['totalNum'] > 0:
+                yield json['data']['items']
+
+    @staticmethod
+    def _add_date_range_params(params: dict, start_time, end_time, precision) -> dict:
+        if start_time is not None:
+            params['startAt'] = to_timestamp(start_time, precision) if isinstance(start_time, datetime) else int(
+                round(start_time))
+        if end_time is not None:
+            params['endAt'] = to_timestamp(end_time, precision) if isinstance(end_time, datetime) else int(
+                round(end_time))
+        return params
+
+    @staticmethod
+    def _aggregate_pages(iterable):
+        read_orders = [json for json in iterable]
+        if len(read_orders) > 0:
+            return functools.reduce(lambda x, y: x + y, read_orders)
+        else:
+            return {}

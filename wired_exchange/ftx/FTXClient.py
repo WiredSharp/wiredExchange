@@ -21,6 +21,8 @@ RESOLUTION = 60 * 60
 
 def _to_klines(base: str, quote: str, candles: list):
     df = pd.DataFrame(candles)
+    if df.size == 0:
+        return df
     df['base_currency'] = base
     df['quote_currency'] = quote
     df.drop(['startTime'], axis='columns', inplace=True)
@@ -124,6 +126,8 @@ class FTXClient(ExchangeClient):
     def enrich_usd_prices(self, tr):
         """retrieve quote and fee currencies usd equivalent"""
         prices = None
+        if tr.size == 0:
+            return tr, tr
         for priceRange in pd.DataFrame(tr[tr['fee_currency'] != 'USD'].groupby(['fee_currency']).agg(['min', 'max'])[
                                            'time']).append(
             tr[tr['quote_currency'] != 'USD'].groupby(['quote_currency']).agg(['min', 'max'])[
@@ -164,6 +168,8 @@ class FTXClient(ExchangeClient):
     # }
     def _to_transactions(self, fills: list):
         tr = pd.DataFrame(fills)
+        if tr.size == 0:
+            return tr
         tr['platform'] = self.platform
         tr['time'] = pd.to_datetime(tr['time'])
         tr.rename(
@@ -201,6 +207,8 @@ class FTXClient(ExchangeClient):
     #   }
     def _to_balances(self, balances_json: dict):
         balances = pd.DataFrame(balances_json)
+        if balances.size == 0:
+            return balances
         balances = balances[balances['total'] > 0]
         balances.rename(columns=dict(availableWithoutBorrow='available', coin='currency'), inplace=True)
         balances.drop(columns=['free', 'usdValue', 'spotBorrow'], inplace=True)
