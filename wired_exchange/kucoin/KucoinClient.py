@@ -1,19 +1,25 @@
+import asyncio
 import base64
 import functools
 import hashlib
 import hmac
+import logging
 import time
 from enum import Enum
 from typing import Literal
 from datetime import datetime
+from uuid import uuid4
 
 import pandas as pd
+import websockets
 from pandas import DataFrame
 
 import httpx
 
 from wired_exchange.core import to_timestamp, to_transactions, to_klines
 from wired_exchange.core.ExchangeClient import ExchangeClient
+
+WS_OPEN_TIMEOUT = 10
 
 
 class CandleStickResolution(Enum):
@@ -68,7 +74,7 @@ class KucoinClient(ExchangeClient):
             response = self._read_pages('/v1/fills', params, authenticated=True)
             return self._to_transactions(response)
         except httpx.HTTPStatusError as ex:
-            self._logger.error('cannot retrieve transactions from Kucoin', ex)
+            raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
 
     def get_orders(self, start_time=None, end_time=None, trade_type: Literal['spot', 'margin'] = 'spot',
                    status: Literal['done', 'active'] = None):
@@ -83,7 +89,7 @@ class KucoinClient(ExchangeClient):
             response = self._httpClient.send(request)
             response.json()
         except httpx.HTTPStatusError as ex:
-            self._logger.error('cannot retrieve transactions from Kucoin', ex)
+            raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
 
     def get_prices_history(self, base: str, quote: str,
                            resolution: CandleStickResolution, start_time=None, end_time=None) -> pd.DataFrame:
@@ -99,7 +105,7 @@ class KucoinClient(ExchangeClient):
                 raise RuntimeError(f'{response["code"]}: response code does not indicate a success')
             return self._to_klines(response['data'], base, quote)
         except httpx.HTTPStatusError as ex:
-            self._logger.error('cannot retrieve transactions from Kucoin', ex)
+            raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
 
     # {
     #     "symbol": "CAKE-USDT",
@@ -168,7 +174,7 @@ class KucoinClient(ExchangeClient):
                 raise RuntimeError(f'{response["code"]}: response code does not indicate a success')
             return self._to_balances(response['data'])
         except httpx.HTTPStatusError as ex:
-            self._logger.error('cannot retrieve accounts list from Kucoin', ex)
+            raise RuntimeError('cannot retrieve accounts list from Kucoin') from ex
 
     def _to_balances(self, balances_json: dict):
         balances = pd.DataFrame(balances_json).groupby('currency').sum()
@@ -181,14 +187,13 @@ class KucoinClient(ExchangeClient):
         balances['platform'] = self.platform
         return balances
 
-
     def get_account_operations(self, start_time=None, end_time=None) -> pd.DataFrame:
         self.open()
         params = {}
         self._add_date_range_params(params, start_time, end_time, 'ms')
         try:
             columns = ['amount', 'currency',
-                   'status', 'createdAt', 'updatedAt', 'walletTxId']
+                       'status', 'createdAt', 'updatedAt', 'walletTxId']
             result = self._read_pages('/v1/deposits', params, authenticated=True)
             deposits = pd.DataFrame(result, columns=columns)
             deposits['type'] = 'deposit'
@@ -197,14 +202,13 @@ class KucoinClient(ExchangeClient):
             withdrawals['type'] = 'withdrawal'
             return self._to_account_operations(deposits, withdrawals)
         except httpx.HTTPStatusError as ex:
-            self._logger.error('cannot retrieve transactions from Kucoin', ex)
+            raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
 
     def _to_account_operations(self, deposits, withdrawals):
         operations = deposits.append(withdrawals, ignore_index=True)
         operations['updatedAt'] = pd.to_datetime(operations['updatedAt'], unit='ms', utc=True)
         operations['platform'] = self.platform
         return operations
-
 
     def get_orders_v1(self, symbol=None, start_time=None, end_time=None) -> pd.DataFrame:
         self.open()
@@ -215,7 +219,7 @@ class KucoinClient(ExchangeClient):
         try:
             return self._read_pages('/v1/hist-orders', params, authenticated=True)
         except httpx.HTTPStatusError as ex:
-            self._logger.error('cannot retrieve transactions from Kucoin', ex)
+            raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
 
     def _read_pages(self, path, params, authenticated, aggregated=True):
         pages = self._get_pages(path, params, authenticated)
@@ -234,6 +238,8 @@ class KucoinClient(ExchangeClient):
                 self._authenticate(request)
             response = self._httpClient.send(request)
             json = response.json()
+            if not json['code'].startswith('200'):
+                raise RuntimeError(f'{json["code"]}: response code does not indicate a success')
             total_pages = json['data']['totalPage']
             remaining_pages = params['current_page'] < total_pages
             if json['data']['totalNum'] > 0:
@@ -256,3 +262,77 @@ class KucoinClient(ExchangeClient):
             return functools.reduce(lambda x, y: x + y, read_orders)
         else:
             return {}
+
+    def _get_ws_connection_info(self, private: bool = False):
+        if private:
+            request = self._httpClient.build_request('POST', '/v1/bullet-private')
+            self._authenticate(request)
+        else:
+            request = self._httpClient.build_request('POST', '/v1/bullet-public')
+        try:
+            return self._httpClient.send(request).json()['data']
+        except httpx.HTTPStatusError as ex:
+            raise RuntimeError('cannot retrieve websocket token from Kucoin') from ex
+
+    async def read_topics(self, topics: list, private: bool = False):
+        ws_cx_data = self._get_ws_connection_info()
+        server = ws_cx_data['instanceServers'][0]
+        socket = KucoinWebSocket(server['endpoint'], ws_cx_data['token'], server['encrypt'],
+                                 server['pingInterval'], server['pingTimeout'])
+        await socket.read_async(topics)
+        return socket
+
+
+class KucoinWebSocket:
+
+    def __init__(self, endpoint, token, encrypt: bool,
+                 ping_interval: int, ping_timeout: int, connect_id: str = None):
+        self._encrypt = encrypt
+        self._ping_timeout = ping_timeout
+        self._ping_interval = ping_interval
+        self._endpoint = endpoint
+        self._token = token
+        self._id = connect_id if connect_id is not None else str(uuid4()).replace('-', '')
+        self._logger = logging.getLogger(type(self).__name__)
+        self._ws = None
+        self._handlers = {'"type":"welcome"': self._handle_welcome}
+        self._connected = asyncio.Event()
+        self._opening = asyncio.Event()
+        self._topics = None
+
+    def open(self):
+        uri = f"{self._endpoint}?token={self._token}&connectId={self._id}"
+        return websockets.connect(uri,
+                                  logger=self._logger,
+                                  ssl=self._encrypt,
+                                  open_timeout=WS_OPEN_TIMEOUT,
+                                  ping_interval=self._ping_interval,
+                                  ping_timeout=self._ping_timeout)
+
+    async def read_async(self, topics: list):
+        try:
+            async for ws in self.open():
+                try:
+                    self._ws = ws
+                    async for message in ws:
+                        self.handle_message(message)
+                        return
+                except websockets.ConnectionClosed:
+                    continue
+        finally:
+            self._connected.clear()
+            self._ws = None
+
+    def handle_message(self, message):
+        self._logger.debug(f'message received: {message}')
+        for handler in self._handlers.items():
+            if handler[0] in message:
+                handler[1](message)
+
+    def subscribe(self, topics: list):
+        self._connected.wait()
+        if self._ws is None:
+            raise RuntimeError('you must first start call read_async')
+
+    def _handle_welcome(self, message):
+        self._connected.set()

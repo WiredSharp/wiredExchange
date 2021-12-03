@@ -1,3 +1,4 @@
+import asyncio
 import json
 import shutil
 from datetime import datetime, timedelta
@@ -132,10 +133,11 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 #     print(kucoin.get_balances())
 #     tr = ftx.get_transactions()
 with KucoinClient() as kucoin:
-    operations = kucoin.get_account_operations(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
-    print(operations)
-    orders = kucoin.get_orders_v1(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
-    print(orders)
+    # operations = kucoin.get_account_operations(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
+    # print(operations)
+    # orders = kucoin.get_orders_v1(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
+    # print(orders)
+    asyncio.run(kucoin.read_ws_async())
 #         print(ktr)
 #         kucoin_tr, _ = ftx.enrich_usd_prices(ktr)
 # tr = tr.append(kucoin_tr)
