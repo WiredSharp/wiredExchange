@@ -2,6 +2,7 @@ import os
 
 import pandas as pd
 import pytomlpp
+from datetime import datetime
 
 resource_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 config_path = os.path.join(resource_path, 'wired_exchange.toml')

@@ -227,6 +227,8 @@ class KucoinClient(ExchangeClient):
         operations = deposits.append(withdrawals, ignore_index=True)
         operations['updatedAt'] = pd.to_datetime(operations['updatedAt'], unit='ms', utc=True)
         operations['platform'] = self.platform
+        operations.rename(columns=dict(updatedAt='time', walletTxId='id',
+                                       amount='size', currency='base_currency'), inplace=True)
         return operations
 
     def get_orders_v1(self, symbol=None, start_time=None, end_time=None) -> pd.DataFrame:
@@ -265,16 +267,6 @@ class KucoinClient(ExchangeClient):
                 yield json['data']['items']
 
     @staticmethod
-    def _add_date_range_params(params: dict, start_time, end_time, precision) -> dict:
-        if start_time is not None:
-            params['startAt'] = to_timestamp(start_time, precision) if isinstance(start_time, datetime) else int(
-                round(start_time))
-        if end_time is not None:
-            params['endAt'] = to_timestamp(end_time, precision) if isinstance(end_time, datetime) else int(
-                round(end_time))
-        return params
-
-    @staticmethod
     def _aggregate_pages(iterable):
         read_orders = [json for json in iterable]
         if len(read_orders) > 0:
@@ -300,3 +292,13 @@ class KucoinClient(ExchangeClient):
                                  server['pingInterval'], server['pingTimeout'])
         await socket.read_async(topics)
         return socket
+
+    @staticmethod
+    def _add_date_range_params(params: dict, start_time, end_time, precision) -> dict:
+        if start_time is not None:
+            params['startAt'] = to_timestamp(start_time, precision) if isinstance(start_time, datetime) else int(
+                round(start_time))
+        if end_time is not None:
+            params['endAt'] = to_timestamp(end_time, precision) if isinstance(end_time, datetime) else int(
+                round(end_time))
+        return params

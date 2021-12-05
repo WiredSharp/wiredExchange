@@ -11,7 +11,7 @@ import pandas as pd
 
 import httpx
 
-from wired_exchange.core import to_timestamp_in_seconds, to_klines, to_transactions
+from wired_exchange.core import to_timestamp_in_seconds, to_klines, to_transactions, to_timestamp
 from wired_exchange.core.ExchangeClient import ExchangeClient
 
 from typing import Union
@@ -43,7 +43,7 @@ class FTXClient(ExchangeClient):
     """FTX API client"""
 
     def __init__(self, api_key=None, api_secret=None, subaccount_name=None, host_url=None):
-        super().__init__('ftx', api_key, api_secret, host_url)
+        super().__init__('ftx', api_key, api_secret, host_url, always_authenticate=False)
         self.subaccount_name = subaccount_name
 
     def _authenticate(self, request):
@@ -70,10 +70,7 @@ class FTXClient(ExchangeClient):
         if end_time is not None:
             params['end_time'] = to_timestamp_in_seconds(end_time)
         try:
-            request = self._httpClient.build_request('GET', '/fills', params=params)
-            response = self._httpClient.send(request).json()
-            if not response['success']:
-                raise Exception('FTX response is not a success')
+            response = self._send_get('/fills', params, authenticated=True)
             return self._to_transactions(response['result'])
         except httpx.HTTPStatusError as ex:
             raise Exception('cannot retrieve transactions from FTX') from ex
@@ -101,7 +98,6 @@ class FTXClient(ExchangeClient):
         except BaseException as ex:
             raise Exception(
                 f'cannot retrieve {base_currency}/{quote_currency} price between {start_time} and {end_time} from FTX') from ex
-
 
     def resolve_price(self, asof_time: Union[datetime, int, float], base_currency: str, quote_currency: str):
         self.open()
@@ -149,7 +145,8 @@ class FTXClient(ExchangeClient):
             tr[tr['quote_currency'] != 'USD'].groupby(['quote_currency']).agg(['min', 'max'])[
                 'time']).itertuples():
             try:
-                new_prices = self.get_prices_history(priceRange.Index, 'USD', priceRange.min, priceRange.max, RESOLUTION)
+                new_prices = self.get_prices_history(priceRange.Index, 'USD', priceRange.min, priceRange.max,
+                                                     RESOLUTION)
                 if prices is None:
                     prices = new_prices
                 else:
@@ -246,3 +243,47 @@ class FTXClient(ExchangeClient):
         balances.set_index('currency', inplace=True)
         balances['platform'] = self.platform
         return balances
+
+    def get_account_operations(self, start_time=None, end_time=None) -> pd.DataFrame:
+        self.open()
+        params = {}
+        self._add_date_range_params(params, start_time, end_time, 's')
+        try:
+            columns = ['size', 'coin',
+                       'status', 'time', 'txid']
+            result = self._send_get('/wallet/deposits', params, authenticated=True)
+            deposits = pd.DataFrame(result['result'], columns=columns)
+            deposits['type'] = 'deposit'
+            result = self._send_get('/wallet/withdrawals', params, authenticated=True)
+            withdrawals = pd.DataFrame(result['result'], columns=columns)
+            withdrawals['type'] = 'withdrawal'
+            return self._to_account_operations(deposits, withdrawals)
+        except httpx.HTTPStatusError as ex:
+            raise RuntimeError('cannot retrieve account operations from FTX') from ex
+
+    def _send_get(self, path: str, params: dict = None, authenticated: bool = False):
+        request = self._httpClient.build_request('GET', path, params=params)
+        if authenticated:
+            self._authenticate(request)
+        response = self._httpClient.send(request).json()
+        if not response['success']:
+            raise Exception('FTX response is not a success')
+        return response
+
+    def _to_account_operations(self, deposits, withdrawals):
+        operations = deposits.append(withdrawals, ignore_index=True)
+        operations['time'] = pd.to_datetime(operations['time'])
+        operations['platform'] = self.platform
+        operations.rename(columns=dict(coin='base_currency', txid='id'), inplace=True)
+        return operations
+
+    @staticmethod
+    def _add_date_range_params(params: dict, start_time, end_time, precision) -> dict:
+        if start_time is not None:
+            params['start_time'] = to_timestamp(start_time, precision) if isinstance(start_time, datetime) else int(
+                round(start_time))
+        if end_time is not None:
+            params['end_time'] = to_timestamp(end_time, precision) if isinstance(end_time, datetime) else int(
+                round(end_time))
+        return params
+    

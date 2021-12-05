@@ -1,7 +1,7 @@
 import logging
 
 import pandas as pd
-
+from datetime import datetime
 from wired_exchange import FTXClient, KucoinClient, WiredStorage
 from wired_exchange.core import to_transactions
 
@@ -22,18 +22,34 @@ class Portfolio:
         self._db.save_transactions(tr)
         return tr
 
-    def import_account_operations(self, start_time) -> pd.DataFrame:
+    def import_account_operations(self, start_time: datetime = None) -> pd.DataFrame:
+        if start_time is None:
+            start_time = self._get_last_transaction_time()
+        ops = None
         with KucoinClient() as kucoin:
-            ops = kucoin.get_account_operations(start_time)
-            if ops.size == 0:
-                return ops
-            tr = pd.DataFrame(ops[ops['status'] == 'SUCCESS'],
-                              columns=['amount', 'currency', 'updatedAt', 'type', 'platform', 'walletTxId'])
-            tr.rename(columns={'currency': 'base_currency', 'amount': 'size'
-                , 'updatedAt': 'time', 'walletTxId': 'id'}, inplace=True)
-            tr['id'] = tr.apply(lambda row: f'{row["platform"]}_{row["id"]}', axis=1)
-            tr.set_index('id', inplace=True)
-            self._db.save_transactions(tr)
+            try:
+                kucoin_ops = kucoin.get_account_operations(start_time)
+                if kucoin_ops.size > 0:
+                    ops = pd.DataFrame(kucoin_ops[kucoin_ops['status'] == 'SUCCESS'],
+                                      columns=['size', 'base_currency', 'id', 'type', 'platform', 'time'])
+            except:
+                self._logger.error('cannot retrieve operations from Kucoin', exc_info=True)
+        with FTXClient() as ftx:
+            try:
+                ftx_ops = ftx.get_account_operations(start_time)
+                if ftx_ops.size > 0:
+                    ftx_ops = pd.DataFrame(ftx_ops[ftx_ops['status'].isin(['confirmed', 'complete'])],
+                                       columns=['size', 'base_currency', 'id', 'type', 'platform', 'time'])
+                    if ops is not None:
+                        ops = ops.append(ftx_ops)
+                    else:
+                        ops = ftx_ops
+            except:
+                self._logger.error('cannot retrieve operations from FTX', exc_info=True)
+        if ops is not None:
+            ops['id'] = ops.apply(lambda row: f'{row["platform"]}_{row["id"]}', axis=1)
+            ops.set_index('id', inplace=True)
+            self._db.save_transactions(ops)
         return ops
 
     def append_transactions(self, transactions: pd.DataFrame):
@@ -85,3 +101,6 @@ class Portfolio:
         summary = pd.concat([p, abp], axis=1)
         summary.rename(columns={0: 'average_buy_price_usd'}, inplace=True)
         return summary
+
+    def _get_last_transaction_time(self) -> datetime:
+        return self._db.read_transactions()['time'].max()

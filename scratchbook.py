@@ -22,67 +22,6 @@ from wired_exchange.ftx.FTXClient import FTXClient
 from wired_exchange.kucoin import KucoinClient, CandleStickResolution
 from wired_exchange.portfolio import Portfolio
 
-
-def try_ftx():
-    with FTXClient() as client:
-        return client.get_transactions(datetime.now(tzlocal.get_localzone()) + timedelta(days=-10))
-
-
-def try_kucoin():
-    kucoin = Market()
-    df = pd.DataFrame(kucoin.get_currencies()).set_index('currency') \
-        .rename(columns={'withdrawalMinSize': 'kucoinWithdrawalMinSize',
-                         'withdrawalMinFee': 'kucoinWithdrawalMinFee',
-                         'isWithdrawEnabled': 'isKucoinWithdrawEnabled',
-                         'isDepositEnabled': 'isKucoinDepositEnabled',
-                         'isMarginEnabled': 'isKucoinMarginEnabled',
-                         'isDebitEnabled': 'isKucoinDebitEnabled'
-                         })
-    df['kucoinWithdrawalMinSize'] = df['kucoinWithdrawalMinSize'].transform(lambda s: float(s))
-    df['kucoinWithdrawalMinFee'] = df['kucoinWithdrawalMinFee'].transform(lambda s: float(s))
-    db = sqlalchemy.create_engine('sqlite:///wired_exchange.sqlite')
-    df.to_sql('CURRENCIES', db, if_exists='replace', index=True
-              , dtype={'currency': sqlalchemy.types.NVARCHAR(5), 'name': sqlalchemy.types.NVARCHAR(20),
-                       'fullName': sqlalchemy.types.NVARCHAR(80), 'precision': sqlalchemy.types.INTEGER,
-                       'confirms': sqlalchemy.types.INTEGER, 'contractAddress': sqlalchemy.types.NVARCHAR(255),
-                       'kucoinWithdrawalMinSize': sqlalchemy.types.FLOAT,
-                       'kucoinWithdrawalMinFee': sqlalchemy.types.FLOAT,
-                       'isKucoinWithdrawEnabled': sqlalchemy.types.BOOLEAN,
-                       'isKucoinDepositEnabled': sqlalchemy.types.BOOLEAN,
-                       'isKucoinMarginEnabled': sqlalchemy.types.BOOLEAN,
-                       'isKucoinDebitEnabled': sqlalchemy.types.BOOLEAN})
-
-    # klines = kucoin.get_kline('BTCUSDT', '1d')
-    # print(klines)
-
-
-def get_kucoin_symbols():
-    kucoin = Market()
-    return kucoin.get_symbol_list()
-
-
-def get_kucoin_markets():
-    kucoin = Market()
-    return kucoin.get_market_list()
-
-
-def get_kucoin_kline():
-    kucoin = Market()
-    return kucoin.get_kline('BTC-USDT', '1min',
-                            startAt=int(round(datetime.fromisoformat('2021-11-11T21:53:00+01:00').timestamp())),
-                            endAt=int(round(datetime.fromisoformat('2021-11-11T21:55:00+01:00').timestamp())))
-
-
-def to_json(data, filepath: str):
-    with open(filepath, 'w') as outfile:
-        json.dump(data, outfile)
-
-
-def from_json(filepath: str):
-    with open(filepath, 'w') as outfile:
-        return json.load(outfile)
-
-
 kucoin_sandbox = False
 
 if kucoin_sandbox:
@@ -96,16 +35,6 @@ logging.config.fileConfig('logging.conf')
 
 logger = logging.getLogger('main')
 logger.info('--------------------- starting Wired Exchange ---------------------')
-
-#notebook_folder = 'D:\\dev\\study\\Study.AlgorithmicTrading\\algorithmic-trading-python\\data'
-
-#     to_json(kucoin.get_transactions(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00')), 'kucoin_transactions-sandbox.json')
-#     to_json(kucoin.get_orders(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00')), 'kucoin_orders-sandbox.json')
-
-# tr = pd.read_json('data/ftx_transactions.json')
-# tr['time'] = pd.to_datetime(tr['time'])
-# tr = tr.astype({'market': 'string', 'baseCurrency': 'string', 'quoteCurrency': 'string', 'type': 'string',
-#                 'side': 'string', 'feeCurrency': 'string', 'liquidity': 'string'})
 
 # shutil.copyfile('\\'.join([notebook_folder, 'ftx_transactions.json']), 'data/ftx_transactions.json')
 # shutil.copyfile('\\'.join([notebook_folder, 'kucoin_transactions.json']), 'data/kucoin_transactions.json')
@@ -123,7 +52,8 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 
 # db = WiredStorage('EBL')
 # with FTXClient() as ftx:
-#     ftx.get_balances().to_json('data/ftx_balances.json', orient='index', date_format='iso')
+#     ftx.get_account_operations()
+     # ftx.get_balances().to_json('data/ftx_balances.json', orient='index', date_format='iso')
 #
 # with KucoinClient() as kucoin:
 #     print(kucoin.get_account_operations())
@@ -152,9 +82,10 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 
 wallet = Portfolio('EBL')
 #
-# wallet.import_account_operations(datetime.fromisoformat('2021-11-30T18:53:00+01:00'))
+wallet.import_account_operations(datetime.fromisoformat('2021-11-10T18:53:00+01:00'))
+# wallet.import_account_operations()
 # wallet.import_transactions(datetime.fromisoformat('2021-12-04T18:53:00+01:00'))
-wallet.get_summary().to_csv('data/positions.csv')
+# wallet.get_summary().to_csv('data/positions.csv')
 # p = wallet.get_positions()
 # print(p)
 # print(wallet.get_average_buy_prices())

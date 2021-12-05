@@ -63,11 +63,13 @@ class WiredStorage:
                                  )
             transactions.create(self.__db)
 
-    def read_transactions(self):
+    def read_transactions(self) -> pd.DataFrame:
         self.open()
         if not self._does_table_exist(TRANSACTIONS_TABLE_NAME):
             self._create_transactions_table()
-        return pd.read_sql_table('TRANSACTIONS', self.__db, index_col='id')
+        data = pd.read_sql_table('TRANSACTIONS', self.__db, index_col='id')
+        data.time = pd.to_datetime(data.time)
+        return data
 
 
 def _get_unicode_name(name):
