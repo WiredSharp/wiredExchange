@@ -113,5 +113,6 @@ fabric.properties
 .env
 /*.log
 /*.db
+/*.sqlite
 
 __pycache__/

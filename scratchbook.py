@@ -40,7 +40,7 @@ def try_kucoin():
                          })
     df['kucoinWithdrawalMinSize'] = df['kucoinWithdrawalMinSize'].transform(lambda s: float(s))
     df['kucoinWithdrawalMinFee'] = df['kucoinWithdrawalMinFee'].transform(lambda s: float(s))
-    db = sqlalchemy.create_engine('sqlite:///wired_exchange.db')
+    db = sqlalchemy.create_engine('sqlite:///wired_exchange.sqlite')
     df.to_sql('CURRENCIES', db, if_exists='replace', index=True
               , dtype={'currency': sqlalchemy.types.NVARCHAR(5), 'name': sqlalchemy.types.NVARCHAR(20),
                        'fullName': sqlalchemy.types.NVARCHAR(80), 'precision': sqlalchemy.types.INTEGER,
@@ -132,12 +132,12 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 #                             end_time=datetime.fromisoformat('2021-11-28T00:53:00+01:00')))
 #     print(kucoin.get_balances())
 #     tr = ftx.get_transactions()
-with KucoinClient() as kucoin:
+# with KucoinClient() as kucoin:
     # operations = kucoin.get_account_operations(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
     # print(operations)
     # orders = kucoin.get_orders_v1(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
     # print(orders)
-    asyncio.run(kucoin.read_ws_async())
+    # asyncio.run(kucoin.read_ws_async())
 #         print(ktr)
 #         kucoin_tr, _ = ftx.enrich_usd_prices(ktr)
 # tr = tr.append(kucoin_tr)
@@ -150,11 +150,11 @@ with KucoinClient() as kucoin:
 # tr.to_json('data/ebr_transactions.json', orient='index', date_format='iso')
 # db.save_transactions(tr)
 
-# wallet = Portfolio('EBR')
+wallet = Portfolio('EBL')
 #
 # wallet.import_account_operations(datetime.fromisoformat('2021-11-30T18:53:00+01:00'))
-# wallet.import_transactions(datetime.fromisoformat('2021-11-11T18:53:00+01:00'))
-# print(wallet.get_summary())
+# wallet.import_transactions(datetime.fromisoformat('2021-12-04T18:53:00+01:00'))
+wallet.get_summary().to_csv('data/positions.csv')
 # p = wallet.get_positions()
 # print(p)
 # print(wallet.get_average_buy_prices())
@@ -165,4 +165,4 @@ with KucoinClient() as kucoin:
 # tr.to_excel('data/ebr_wallet_transactions.xlsx', engine='xlsxwriter')
 # print(wallet.get_transaction())
 
-logger.info('--------------------- Wired Exchange stopped ---------------------')
+logger.info('--------------------- Wired Exchange Ended ---------------------')

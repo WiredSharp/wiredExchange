@@ -26,8 +26,3 @@ def import_transactions(profile: str):
     with WiredStorage(profile) as db:
         db.save_transactions(tr)
     return tr
-
-
-# from .trades import *
-# from .portfolio import *
-from .storage import *

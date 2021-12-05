@@ -1,7 +1,7 @@
 # SqlAlchemy engine
 
 ## create engine
-```sqlalchemy.create_engine(sqlite://wired_exchange.db)```
+```sqlalchemy.create_engine(sqlite://wired_exchange.sqlite)```
 
 - connect()
 Returns connection object

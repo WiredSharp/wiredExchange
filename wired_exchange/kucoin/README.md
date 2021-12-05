@@ -23,3 +23,7 @@
 |411100|	User are frozen|
 |500000|	Internal Server Error|
 |900001|	symbol not exists|
+
+## WebSocket
+
+[websockets package](https://websockets.readthedocs.io/en/stable/)

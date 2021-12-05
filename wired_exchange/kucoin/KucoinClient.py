@@ -1,41 +1,19 @@
-import asyncio
 import base64
 import functools
 import hashlib
 import hmac
-import logging
 import time
-from enum import Enum
-from typing import Literal
 from datetime import datetime
-from uuid import uuid4
-
-import pandas as pd
-import websockets
-from pandas import DataFrame
+from typing import Literal
 
 import httpx
+import pandas as pd
+from pandas import DataFrame
 
 from wired_exchange.core import to_timestamp, to_transactions, to_klines
 from wired_exchange.core.ExchangeClient import ExchangeClient
-
-WS_OPEN_TIMEOUT = 10
-
-
-class CandleStickResolution(Enum):
-    _1min = '1min'
-    _3min = '3min'
-    _5min = '5min'
-    _15min = '15min'
-    _30min = '30min'
-    _1hour = '1hour'
-    _2hour = '2hour'
-    _4hour = '4hour'
-    _6hour = '6hour'
-    _8hour = '8hour'
-    _12hour = '12hour'
-    _1day = '1day'
-    _1week = '1week'
+from wired_exchange.kucoin import CandleStickResolution
+from wired_exchange.kucoin.WebSocket import KucoinWebSocket
 
 
 class KucoinClient(ExchangeClient):
@@ -164,7 +142,7 @@ class KucoinClient(ExchangeClient):
         tr['time'] = pd.to_numeric(tr['time']) * 1000
         return to_klines(tr, base, quote)
 
-    def get_balances(self):
+    def get_balances(self) -> pd.DataFrame:
         self.open()
         try:
             request = self._httpClient.build_request('GET', '/v1/accounts')
@@ -176,16 +154,57 @@ class KucoinClient(ExchangeClient):
         except httpx.HTTPStatusError as ex:
             raise RuntimeError('cannot retrieve accounts list from Kucoin') from ex
 
-    def _to_balances(self, balances_json: dict):
-        balances = pd.DataFrame(balances_json).groupby('currency').sum()
+    def _to_balances(self, balances_json: dict) -> pd.DataFrame:
+        balances = pd.DataFrame(balances_json)
         if balances.size == 0:
             return balances
-        balances.rename(columns=dict(balance='total'), inplace=True)
         balances.drop(columns=['id', 'type', 'holds'], inplace=True)
-        balances['total'] = pd.to_numeric(balances['total'])
+        balances['balance'] = pd.to_numeric(balances['balance'])
+        balances = balances[balances['balance'] != 0.0]
         balances['available'] = pd.to_numeric(balances['available'])
+        balances = balances.groupby('currency').sum()
+        try:
+            tickers = self.get_all_tickers()
+            balances = balances.merge(tickers, left_index=True,
+                                      right_on='currency', how='left')
+            balances.drop(columns=['symbol', 'symbolName'], inplace=True)
+        except:
+            self._logger.warning('cannot retrieve current tickers', exc_info=True)
+        balances.rename(columns=dict(balance='total', averagePrice='average_price'), inplace=True)
+        balances.set_index('currency', inplace=True)
         balances['platform'] = self.platform
+        balances.convert_dtypes()
         return balances
+
+    def get_all_tickers(self) -> pd.DataFrame:
+        tickers = self._httpClient.get('v1/market/allTickers').json()
+        if not tickers['code'].startswith('200'):
+            raise RuntimeError(f'{tickers["code"]}: response code does not indicate a success')
+        tickers = self._convert_to_ticker(tickers)
+        return tickers
+
+    def _convert_to_ticker(self, tickers: dict) -> pd.DataFrame:
+        asof_time = pd.to_datetime(tickers['data']['time'], unit='ms', utc=True)
+        tickers = pd.DataFrame(tickers['data']['ticker'])
+        tickers = tickers[tickers['symbol'].str.endswith('USDT')]
+        tickers['currency'] = tickers['symbol'].apply(lambda s: s.split('-')[0])
+        tickers['time'] = asof_time
+        tickers.rename(columns=dict(buy='bid', sell='ask', changePrice='change24h'
+                                    , high='high24h', low='low24h', volValue='quoteVolume24h'), inplace=True)
+        tickers.bid = pd.to_numeric(tickers.bid)
+        tickers.ask = pd.to_numeric(tickers.ask)
+        tickers.changeRate = pd.to_numeric(tickers.changeRate)
+        tickers.change24h = pd.to_numeric(tickers.change24h)
+        tickers.high24h = pd.to_numeric(tickers.high24h)
+        tickers.low24h = pd.to_numeric(tickers.low24h)
+        tickers.vol = pd.to_numeric(tickers.vol)
+        tickers.quoteVolume24h = pd.to_numeric(tickers.quoteVolume24h)
+        tickers['last'] = pd.to_numeric(tickers['last'])
+        tickers.averagePrice = pd.to_numeric(tickers.averagePrice)
+        tickers.takerFeeRate = pd.to_numeric(tickers.takerFeeRate)
+        tickers.makerFeeRate = pd.to_numeric(tickers.makerFeeRate)
+        tickers.takerCoefficient = pd.to_numeric(tickers.takerCoefficient)
+        return tickers
 
     def get_account_operations(self, start_time=None, end_time=None) -> pd.DataFrame:
         self.open()
@@ -281,58 +300,3 @@ class KucoinClient(ExchangeClient):
                                  server['pingInterval'], server['pingTimeout'])
         await socket.read_async(topics)
         return socket
-
-
-class KucoinWebSocket:
-
-    def __init__(self, endpoint, token, encrypt: bool,
-                 ping_interval: int, ping_timeout: int, connect_id: str = None):
-        self._encrypt = encrypt
-        self._ping_timeout = ping_timeout
-        self._ping_interval = ping_interval
-        self._endpoint = endpoint
-        self._token = token
-        self._id = connect_id if connect_id is not None else str(uuid4()).replace('-', '')
-        self._logger = logging.getLogger(type(self).__name__)
-        self._ws = None
-        self._handlers = {'"type":"welcome"': self._handle_welcome}
-        self._connected = asyncio.Event()
-        self._opening = asyncio.Event()
-        self._topics = None
-
-    def open(self):
-        uri = f"{self._endpoint}?token={self._token}&connectId={self._id}"
-        return websockets.connect(uri,
-                                  logger=self._logger,
-                                  ssl=self._encrypt,
-                                  open_timeout=WS_OPEN_TIMEOUT,
-                                  ping_interval=self._ping_interval,
-                                  ping_timeout=self._ping_timeout)
-
-    async def read_async(self, topics: list):
-        try:
-            async for ws in self.open():
-                try:
-                    self._ws = ws
-                    async for message in ws:
-                        self.handle_message(message)
-                        return
-                except websockets.ConnectionClosed:
-                    continue
-        finally:
-            self._connected.clear()
-            self._ws = None
-
-    def handle_message(self, message):
-        self._logger.debug(f'message received: {message}')
-        for handler in self._handlers.items():
-            if handler[0] in message:
-                handler[1](message)
-
-    def subscribe(self, topics: list):
-        self._connected.wait()
-        if self._ws is None:
-            raise RuntimeError('you must first start call read_async')
-
-    def _handle_welcome(self, message):
-        self._connected.set()

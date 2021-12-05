@@ -1,10 +1,9 @@
 import pandas as pd
-from sqlalchemy import create_engine, MetaData, Table, Column, String, FLOAT, TIMESTAMP, NVARCHAR
+from sqlalchemy import create_engine, MetaData, Table, Column, String, FLOAT, NVARCHAR
 
-from wired_exchange.core import to_transactions
-
-WIRED_EXCHANGE_DATABASE = 'wired_exchange.db'
+WIRED_EXCHANGE_DATABASE = 'wired_exchange.sqlite'
 TRANSACTIONS_TABLE_NAME = 'TRANSACTIONS'
+
 
 class WiredStorage:
 
@@ -35,7 +34,15 @@ class WiredStorage:
 
     def save_transactions(self, tr):
         self.open()
-        if TRANSACTIONS_TABLE_NAME not in self.__metadata.tables.keys():
+        if not self._does_table_exist(TRANSACTIONS_TABLE_NAME):
+            self._create_transactions_table()
+        tr.to_sql('TRANSACTIONS', self.__db, method=_upsert, if_exists='append', index=True, index_label='id')
+
+    def _does_table_exist(self, table_name: str) -> bool:
+        return table_name in self.__metadata.tables.keys()
+
+    def _create_transactions_table(self):
+        if not self._does_table_exist(TRANSACTIONS_TABLE_NAME):
             transactions = Table(TRANSACTIONS_TABLE_NAME, self.__metadata,
                                  Column('id', NVARCHAR(25), primary_key=True),
                                  Column('base_currency', NVARCHAR(5)),
@@ -55,14 +62,11 @@ class WiredStorage:
                                  Column('fee_usd', FLOAT)
                                  )
             transactions.create(self.__db)
-        tr.to_sql('TRANSACTIONS', self.__db, method=_upsert, if_exists='append', index=True, index_label='id')
-
-    def save_prices(self, prices):
-        # table_name = _get_currencies_tablename(prices.iat[0, ''], )
-        raise NotImplementedError('todo')
 
     def read_transactions(self):
         self.open()
+        if not self._does_table_exist(TRANSACTIONS_TABLE_NAME):
+            self._create_transactions_table()
         return pd.read_sql_table('TRANSACTIONS', self.__db, index_col='id')
 
 

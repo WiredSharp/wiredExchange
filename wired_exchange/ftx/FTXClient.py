@@ -118,10 +118,26 @@ class FTXClient(ExchangeClient):
             response = self._httpClient.send(request).json()
             if not response['success']:
                 raise Exception('FTX response is not a success')
-            return response['result'][0]['close']
+            if len(response['result']) > 0:
+                return response['result'][0]['close']
+            else:
+                return np.nan
 
         except BaseException as ex:
             raise Exception(f'cannot retrieve {base_currency}/{quote_currency} price at {asof_time} from FTX') from ex
+
+    def resolve_current_price(self, base_currency: str, quote_currency: str):
+        self.open()
+        try:
+            response = self._httpClient.get(f'/markets/{base_currency}/{quote_currency}').json()
+            if not response['success']:
+                raise Exception('FTX response is not a success')
+            if len(response['result']) > 0:
+                return response['result']['price']
+            else:
+                return np.nan
+        except BaseException as ex:
+            raise Exception(f'cannot retrieve {base_currency}/{quote_currency} current price from FTX') from ex
 
     def enrich_usd_prices(self, tr):
         """retrieve quote and fee currencies usd equivalent"""
@@ -212,6 +228,21 @@ class FTXClient(ExchangeClient):
         balances = balances[balances['total'] > 0]
         balances.rename(columns=dict(availableWithoutBorrow='available', coin='currency'), inplace=True)
         balances.drop(columns=['free', 'usdValue', 'spotBorrow'], inplace=True)
+        try:
+            request = self._httpClient.build_request('GET', '/markets')
+            tickers = self._httpClient.send(request).json()
+            if not tickers['success']:
+                raise Exception('FTX response is not a success')
+            tickers = pd.DataFrame(tickers['result'])
+            tickers = tickers[tickers['quoteCurrency'] == 'USDT']
+            balances = balances.merge(tickers, left_on='currency',
+                                      right_on='baseCurrency', how='left')
+            balances.drop(columns=['name', 'enabled', 'postOnly', 'restricted',
+                                   'highLeverageFeeExempt', 'baseCurrency', 'quoteCurrency',
+                                   'underlying', 'type', 'changeBod', 'tokenizedEquity'], inplace=True)
+            balances.rename(columns=dict(baseCurrency='currency', price='average_price'), inplace=True)
+        except:
+            self._logger.warning('cannot retrieve current tickers', exc_info=True)
         balances.set_index('currency', inplace=True)
         balances['platform'] = self.platform
         return balances
