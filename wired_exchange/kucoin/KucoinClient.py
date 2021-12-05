@@ -170,7 +170,7 @@ class KucoinClient(ExchangeClient):
             balances.drop(columns=['symbol', 'symbolName'], inplace=True)
         except:
             self._logger.warning('cannot retrieve current tickers', exc_info=True)
-        balances.rename(columns=dict(balance='total', averagePrice='average_price'), inplace=True)
+        balances.rename(columns=dict(balance='total', averagePrice='price'), inplace=True)
         balances.set_index('currency', inplace=True)
         balances['platform'] = self.platform
         balances.convert_dtypes()

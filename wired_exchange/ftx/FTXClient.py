@@ -65,10 +65,7 @@ class FTXClient(ExchangeClient):
     def get_transactions(self, start_time=None, end_time=None):
         self.open()
         params = {}
-        if start_time is not None:
-            params['start_time'] = to_timestamp_in_seconds(start_time)
-        if end_time is not None:
-            params['end_time'] = to_timestamp_in_seconds(end_time)
+        self._add_date_range_params(start_time, end_time, precision='s')
         try:
             response = self._send_get('/fills', params, authenticated=True)
             return self._to_transactions(response['result'])
@@ -79,19 +76,12 @@ class FTXClient(ExchangeClient):
                            start_time: Union[datetime, int, float], end_time: Union[datetime, int, float],
                            resolution: int):
         self.open()
-        params = {'start_time': to_timestamp_in_seconds(start_time) if isinstance(start_time, datetime) else int(
-            round(start_time)),
-                  'end_time': to_timestamp_in_seconds(end_time) if isinstance(end_time, datetime) else int(
-                      round(end_time)),
-                  'resolution': resolution}
+        params = {'resolution': resolution}
+        self._add_date_range_params(start_time, end_time, precision='s')
         params['start_time'] -= resolution
         params['end_time'] += resolution
         try:
-            request = self._httpClient.build_request('GET', f'/markets/{base_currency}/{quote_currency}/candles',
-                                                     params=params)
-            response = self._httpClient.send(request).json()
-            if not response['success']:
-                raise Exception('FTX response is not a success')
+            response = self._send_get(f'/markets/{base_currency}/{quote_currency}/candles', params=params)
             klines = _to_klines(base_currency, quote_currency, response['result'])
             return klines
 
@@ -109,11 +99,7 @@ class FTXClient(ExchangeClient):
                   'end_time': to_timestamp_in_seconds(asof_time + timedelta(seconds=window_size)),
                   'resolution': window_size}
         try:
-            request = self._httpClient.build_request('GET', f'/markets/{base_currency}/{quote_currency}/candles',
-                                                     params=params)
-            response = self._httpClient.send(request).json()
-            if not response['success']:
-                raise Exception('FTX response is not a success')
+            response = self._send_get(f'/markets/{base_currency}/{quote_currency}/candles', params=params)
             if len(response['result']) > 0:
                 return response['result'][0]['close']
             else:
@@ -125,9 +111,7 @@ class FTXClient(ExchangeClient):
     def resolve_current_price(self, base_currency: str, quote_currency: str):
         self.open()
         try:
-            response = self._httpClient.get(f'/markets/{base_currency}/{quote_currency}').json()
-            if not response['success']:
-                raise Exception('FTX response is not a success')
+            response = self._send_get(f'/markets/{base_currency}/{quote_currency}')
             if len(response['result']) > 0:
                 return response['result']['price']
             else:
@@ -200,10 +184,7 @@ class FTXClient(ExchangeClient):
     def get_balances(self):
         self.open()
         try:
-            request = self._httpClient.build_request('GET', '/wallet/balances')
-            response = self._httpClient.send(request).json()
-            if not response['success']:
-                raise Exception('FTX response is not a success')
+            response = self._send_get('/wallet/balances', authenticated=True)
             return self._to_balances(response['result'])
 
         except BaseException as ex:
@@ -237,7 +218,7 @@ class FTXClient(ExchangeClient):
             balances.drop(columns=['name', 'enabled', 'postOnly', 'restricted',
                                    'highLeverageFeeExempt', 'baseCurrency', 'quoteCurrency',
                                    'underlying', 'type', 'changeBod', 'tokenizedEquity'], inplace=True)
-            balances.rename(columns=dict(baseCurrency='currency', price='average_price'), inplace=True)
+            balances.rename(columns=dict(baseCurrency='currency'), inplace=True)
         except:
             self._logger.warning('cannot retrieve current tickers', exc_info=True)
         balances.set_index('currency', inplace=True)

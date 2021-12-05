@@ -82,10 +82,10 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 
 wallet = Portfolio('EBL')
 #
-wallet.import_account_operations(datetime.fromisoformat('2021-11-10T18:53:00+01:00'))
+#wallet.import_account_operations(datetime.fromisoformat('2021-11-10T18:53:00+01:00'))
 # wallet.import_account_operations()
 # wallet.import_transactions(datetime.fromisoformat('2021-12-04T18:53:00+01:00'))
-# wallet.get_summary().to_csv('data/positions.csv')
+wallet.get_summary().to_csv('data/positions.csv')
 # p = wallet.get_positions()
 # print(p)
 # print(wallet.get_average_buy_prices())

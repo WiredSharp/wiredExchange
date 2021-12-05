@@ -12,13 +12,18 @@ class Portfolio:
         self._db = WiredStorage(self.profile)
         self._logger = logging.getLogger(type(self).__name__)
 
-    def import_transactions(self, start_time) -> pd.DataFrame:
+    def import_transactions(self, start_time: datetime = None) -> pd.DataFrame:
+        if start_time is None:
+            start_time = self._get_last_transaction_time()
         with FTXClient() as ftx:
             tr = ftx.get_transactions(start_time=start_time)
             with KucoinClient() as kucoin:
-                kucoin_tr, _ = ftx.enrich_usd_prices(
-                    kucoin.get_transactions(start_time=start_time))
-        tr = tr.append(kucoin_tr)
+                try:
+                    kucoin_tr, _ = ftx.enrich_usd_prices(
+                        kucoin.get_transactions(start_time=start_time))
+                    tr = tr.append(kucoin_tr)
+                except:
+                    self._logger.error('cannot retrieve operations from Kucoin', exc_info=True)
         self._db.save_transactions(tr)
         return tr
 
@@ -77,7 +82,7 @@ class Portfolio:
                 self._logger.error('cannot retrieve balances from FTX', exc_info=True)
             try:
                 current_usdt_price = ftx.resolve_current_price('USDT', 'USD')
-                tr['average_price_usd'] = current_usdt_price * tr['average_price']
+                tr['price_usd'] = current_usdt_price * tr['price']
             except:
                 self._logger.error('cannot retrieve USDT current price from FTX', exc_info=True)
         return tr
@@ -89,9 +94,15 @@ class Portfolio:
         buy_trs = tr['side'] == 'buy'
         orders = tr['type'].isin(['order', 'limit', 'market'])
         quote_currencies = tr['base_currency'].isin(['USD', 'USDT'])
-        tr['amount_usd'] = tr['size'] * tr['price'] * tr['price_usd']
+        tr['amount'] = tr['size'] * tr['price']
+        tr['amount_usd'] = tr['amount'] * tr['price_usd']
         by_currencies = tr[buy_trs & orders & (~quote_currencies)].groupby('base_currency')
-        return by_currencies['amount_usd'].sum() / by_currencies['size'].sum()
+        size_sum = by_currencies['size'].sum()
+        average_prices = by_currencies['amount'].sum() / size_sum
+        average_usd_prices = by_currencies['amount_usd'].sum() / size_sum
+        average_prices = pd.concat([average_prices, average_usd_prices], axis=1)
+        average_prices.rename(columns={0: 'average_buy_price', 1: 'average_buy_price_usd'}, inplace=True)
+        return average_prices
 
     def get_summary(self):
         p = self.get_positions()
@@ -99,7 +110,9 @@ class Portfolio:
         if abp.size == 0:
             return p
         summary = pd.concat([p, abp], axis=1)
-        summary.rename(columns={0: 'average_buy_price_usd'}, inplace=True)
+        summary['PnL_pc'] = (summary['price_usd'] - summary['average_buy_price_usd']) / summary[
+            'average_buy_price_usd'] * 100
+        summary['PnL_tt'] = (summary['price_usd'] - summary['average_buy_price_usd']) * summary['total']
         return summary
 
     def _get_last_transaction_time(self) -> datetime:
