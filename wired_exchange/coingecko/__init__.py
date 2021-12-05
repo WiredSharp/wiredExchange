@@ -21,7 +21,7 @@ async def load_coins_data():
         # pis CoinGecko API with async client
         coins = await coingecko.coins_list()
         df = pd.DataFrame(coins).set_index('symbol').rename(columns={'id': 'id_coingecko'})
-        db = sqlalchemy.create_engine('sqlite:///wired_exchange.db')
+        db = sqlalchemy.create_engine('sqlite:///wired_exchange.sqlite')
         df.to_sql('COINS', db, if_exists='replace', index=True
                     , dtype={"id_coingecko": sqlalchemy.types.NVARCHAR(50),
                              "symbol": sqlalchemy.types.NVARCHAR(20),
@@ -34,7 +34,7 @@ async def load_exchanges_data():
     try:
         exchanges = await coingecko.exchanges_list()
         df = pd.DataFrame(exchanges).set_index('name').rename(columns={'id': 'id_coingecko'})
-        db = sqlalchemy.create_engine('sqlite:///wired_exchange.db')
+        db = sqlalchemy.create_engine('sqlite:///wired_exchange.sqlite')
         df.to_sql('EXCHANGES', db, if_exists='replace', index=True
                     , dtype={"id_coingecko": sqlalchemy.types.NVARCHAR(50),
                              "name": sqlalchemy.types.NVARCHAR(80)})
@@ -43,7 +43,7 @@ async def load_exchanges_data():
 
 async def load_market_data(symbol):
     try:
-        db = sqlalchemy.create_engine('sqlite:///wired_exchange.db')
+        db = sqlalchemy.create_engine('sqlite:///wired_exchange.sqlite')
         metadata = MetaData()
         coins = Table('COINS', metadata, autoload=True, autoload_with=db)
         id_coingecko = db.scalar(select(coins.c.id_coingecko).where(coins.symbol == symbol))
