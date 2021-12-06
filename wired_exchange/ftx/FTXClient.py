@@ -65,7 +65,7 @@ class FTXClient(ExchangeClient):
     def get_transactions(self, start_time=None, end_time=None):
         self.open()
         params = {}
-        self._add_date_range_params(start_time, end_time, precision='s')
+        self._add_date_range_params(params, start_time, end_time, precision='s')
         try:
             response = self._send_get('/fills', params, authenticated=True)
             return self._to_transactions(response['result'])
@@ -77,7 +77,7 @@ class FTXClient(ExchangeClient):
                            resolution: int):
         self.open()
         params = {'resolution': resolution}
-        self._add_date_range_params(start_time, end_time, precision='s')
+        self._add_date_range_params(params, start_time, end_time, precision='s')
         params['start_time'] -= resolution
         params['end_time'] += resolution
         try:
