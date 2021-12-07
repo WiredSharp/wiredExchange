@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import functools
 import hashlib
@@ -23,6 +24,7 @@ class KucoinClient(ExchangeClient):
         super().__init__('kucoin', api_key, api_secret, host_url, always_authenticate=False)
         self._api_passphrase = api_passphrase if api_passphrase is not None else self._get_exchange_env_value(
             'api_passphrase')
+        self._ws = None
 
     def _authenticate(self, request):
         ts = int(round(time.time())) * 1000
@@ -285,13 +287,24 @@ class KucoinClient(ExchangeClient):
         except httpx.HTTPStatusError as ex:
             raise RuntimeError('cannot retrieve websocket token from Kucoin') from ex
 
-    async def read_topics(self, topics: list, private: bool = False):
-        ws_cx_data = self._get_ws_connection_info()
+    def _open_websocket(self, private: bool = False):
+        if self._ws is not None:
+            return
+        ws_cx_data = self._get_ws_connection_info(private)
         server = ws_cx_data['instanceServers'][0]
-        socket = KucoinWebSocket(server['endpoint'], ws_cx_data['token'], server['encrypt'],
-                                 server['pingInterval'], server['pingTimeout'])
-        await socket.read_async(topics)
-        return socket
+        self._ws = KucoinWebSocket(server['endpoint'], ws_cx_data['token'], server['encrypt'],
+                                   server['pingInterval'], server['pingTimeout'])
+        return asyncio.create_task(self._ws.open_async())
+
+    async def register_strategy_async(self, strategy, private: bool = False):
+        self._open_websocket(private)
+        self._ws.insert_handler(strategy)
+        await self._ws.subscribe_klines_async(strategy.topics)
+
+    def cancel_reading(self):
+        if self._ws is not None:
+            self._ws.close()
+            self._ws = None
 
     @staticmethod
     def _add_date_range_params(params: dict, start_time, end_time, precision) -> dict:

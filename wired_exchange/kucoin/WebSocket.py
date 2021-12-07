@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+from enum import Enum
 from uuid import uuid4
 
 import websockets
@@ -11,6 +12,15 @@ WS_OPEN_TIMEOUT = 10
 WS_CONNECTION_TIMEOUT = 3
 
 
+class WebSocketState(Enum):
+    STATE_WS_READY = 1
+    STATE_WS_CLOSING = 2
+
+
+class WebSocketNotification(Enum):
+    CONNECTION_LOST = 1
+
+
 class WebSocketMessageHandler:
 
     def can_handle(self, message: str) -> bool:
@@ -19,6 +29,9 @@ class WebSocketMessageHandler:
     def handle(self, message: str) -> bool:
         """process received message and indicates if handler must be kept registered
         one time handler are useful when waiting for acknowledgement"""
+        pass
+
+    def notify(self, notification: WebSocketNotification):
         pass
 
 
@@ -34,13 +47,16 @@ class KucoinWebSocket:
         self._id = connect_id if connect_id is not None else str(uuid4()).replace('-', '')
         self._logger = logging.getLogger(type(self).__name__)
         self._ws = None
-        self._welcomeHandler = self.WelcomeMessageHandler()
+        self._connected = asyncio.Event()
+        self._welcomeHandler = self.WelcomeMessageHandler(self._connected)
         self._handlers = [self._welcomeHandler, SinkMessageHandler()]
-        self._opening = asyncio.Event()
+        self._state: WebSocketState = WebSocketState.STATE_WS_READY
 
-    async def read_async(self, topics: list[tuple[str, str, CandleStickResolution]]):
+    async def open_async(self):
         uri = f"{self._endpoint}?token={self._token}&connectId={self._id}"
         try:
+            if self._state != WebSocketState.STATE_WS_READY:
+                return
             async for ws in websockets.connect(uri,
                                                logger=self._logger,
                                                ssl=self._encrypt,
@@ -48,79 +64,90 @@ class KucoinWebSocket:
                                                ping_interval=self._ping_interval,
                                                ping_timeout=self._ping_timeout):
                 try:
+                    if self._state == WebSocketState.STATE_WS_CLOSING:
+                        break
                     self._ws = ws
                     self._disconnect()
-                    self.insert_handler(self.WelcomeMessageHandler())
-                    await self.subscribe_klines_async(topics)
-                    async for message in ws:
-                        try:
-                            self.handle_message(message)
-                        except:
-                            self._logger.error(f'something goes wrong when processing message: {message}')
-                        return
+                    await self._run_message_loop(ws)
                 except websockets.ConnectionClosed:
                     continue
         finally:
+            for handler in self._handlers:
+                handler.notify(WebSocketNotification.CONNECTION_LOST)
             self._disconnect()
             self._ws = None
+            self._state = WebSocketState.STATE_WS_READY
+
+    async def _run_message_loop(self, ws: websockets):
+        async for message in ws:
+            try:
+                if self._state == WebSocketState.STATE_WS_CLOSING:
+                    break
+                self.handle_message(message)
+            except:
+                self._logger.error(f'something goes wrong when processing message: {message}')
 
     def insert_handler(self, handler: WebSocketMessageHandler):
-        self._handlers.insert(handler)
+        self._handlers.insert(0, handler)
+        self._logger.debug(f'{type(handler).__name__}: handler registered')
 
     def handle_message(self, message):
-        self._logger.debug(f'message received: {message}')
         for handler in self._handlers:
             if handler.can_handle(message):
+                self._logger.debug(f'handler found: {type(handler).__name__}')
                 handler.handle(message)
                 return
 
     async def subscribe_klines_async(self, topics: list[tuple[str, str, CandleStickResolution]]):
-        await self._wait_connection_async()
-        subscription_id = random.randint(100000000, 1000000000)
-        self.insert_handler(KlineSubscriptionHandler(subscription_id))
-        self._ws.send(self.new_klines_subscription_message(subscription_id, topics))
+        try:
+            await self.wait_connection_async()
+            subscription_id = random.randint(100000000, 1000000000)
+            self.insert_handler(KlineSubscriptionHandler(subscription_id))
+            await self._ws.send(self.new_klines_subscription_message(subscription_id, topics))
+            self._logger.debug('subscription completed')
+        except TimeoutError:
+            self._logger.error('subscription timeout', exc_info=True)
 
     def new_klines_subscription_message(self, subscription_id: int,
                                         topics: list[tuple[str, str, CandleStickResolution]]):
         return f"""
-        {
+        {{
         "id": {subscription_id},
             "type": "subscribe",
             "topic": "/market/candles:{','.join([f'{bc}-{qc}_{res.value}' for bc, qc, res in topics])}",
             "response": true
-        }
+        }}
         """
 
     def _disconnect(self):
-        self._welcomeHandler.release()
+        self._connected.clear()
+        return self
 
-    def _wait_connection_async(self, timeout: int = WS_CONNECTION_TIMEOUT):
-        return self._welcomeHandler.wait_connection_async(timeout)
+    def is_connected(self):
+        self._connected.is_set()
+
+    def wait_connection_async(self, timeout: int = WS_CONNECTION_TIMEOUT):
+        return asyncio.wait_for(self._connected.wait(), timeout)
+
+    def close(self):
+        self._state = WebSocketState.STATE_WS_READY
 
     class WelcomeMessageHandler(WebSocketMessageHandler):
-        def __init__(self):
-            self._connected = asyncio.Event()
+        def __init__(self, event: asyncio.Event):
+            self._connected = event
+            self._logger = logging.getLogger(type(self).__name__)
 
         def can_handle(self, message):
-            return '"type":"welcome"' in message
+            return not self._connected.is_set() and '"type":"welcome"' in message
 
         def handle(self, message):
             self._connected.set()
-            return False
-
-        def release(self):
-            self._connected.clear()
-
-        def is_connected(self):
-            self._connected.is_set()
-
-        def wait_connection_async(self, timeout: int):
-            return asyncio.wait_for(self._connected.wait(), timeout)
+            self._logger.debug('connection acknowledged by server')
+            return True
 
 
 class SinkMessageHandler(WebSocketMessageHandler):
     def __init__(self):
-        self._connected = asyncio.Event()
         self._logger = logging.getLogger(type(self).__name__)
 
     def can_handle(self, message):
@@ -129,9 +156,6 @@ class SinkMessageHandler(WebSocketMessageHandler):
     def handle(self, message):
         self._logger.debug(f'unhandled message received: {message}')
         return True
-
-    def wait_connection_async(self, timeout: int):
-        return asyncio.wait_for(self._connected.wait(), timeout)
 
 
 class KlineSubscriptionHandler(WebSocketMessageHandler):
@@ -151,16 +175,4 @@ class KlineSubscriptionHandler(WebSocketMessageHandler):
 
 
 class StrategyHandler(WebSocketMessageHandler):
-    def __init__(self, subscription_id: int):
-        self.subscription_id = subscription_id
-        self._logger = logging.getLogger(type(self).__name__)
-
-    def can_handle(self, message: str) -> bool:
-        return f'"id":{self.subscription_id}' in message
-
-    def handle(self, message: str) -> bool:
-        if '"type":"ack"' in message:
-            self._logger.info(f'subscription #{self.subscription_id} acknowledged')
-        else:
-            self._logger.warning(f'subscription #{self.subscription_id}: unexpected response: {message}')
-        return False
+    pass
