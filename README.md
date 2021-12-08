@@ -1,8 +1,21 @@
 # crypto exchange BOT SDK
 
+- [ ] Allow access from mobile to
+  - [X] positions
+  - [ ] bot logs
 - [ ] Retrieves market prices form various exchange in a homogeneous way
   - [X] [FTX](https://docs.ftx.com/?python#rest-api)
   - [X] [Kucoin](https://docs.kucoin.com/#general)
+  - [ ] [Binance](https://binance-docs.github.io/apidocs)
+  - [ ] [BitPanda](https://developers.bitpanda.com/platform/)
+- [ ] Connect to web socket market data stream
+  - [ ] [FTX](https://docs.ftx.com/?python#rest-api)
+  - [X] [Kucoin](https://docs.kucoin.com/#general)
+  - [ ] [Binance](https://binance-docs.github.io/apidocs)
+  - [ ] [BitPanda](https://developers.bitpanda.com/platform/)
+- [ ] Connect to web socket order data stream
+  - [ ] [FTX](https://docs.ftx.com/?python#rest-api)
+  - [ ] [Kucoin](https://docs.kucoin.com/#general)
   - [ ] [Binance](https://binance-docs.github.io/apidocs)
   - [ ] [BitPanda](https://developers.bitpanda.com/platform/)
 - [ ] Retrieve portfolio information
@@ -19,7 +32,7 @@
 - [ ] Defines a data model 
   - [X] for transactions
   - [X] for market data
-  - [ ] for positions
+  - [X] for positions
   - [ ] for orders
 - [ ] Crypto data
   - [ ] PnL

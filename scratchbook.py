@@ -118,10 +118,11 @@ class MyStrategy(WebSocketMessageHandler):
     def __init__(self, topics: list[(str, str, CandleStickResolution)]):
         self._topics = topics
         self._logger = logging.getLogger(type(self).__name__)
+        self._topics_pattern = [f'"topic":"/market/candles:{bc}-{qc}_{res.value}"' for bc, qc, res in self._topics]
 
     # {"type":"message","topic":"/market/candles:AVAX-USDT_1min","subject":"trade.candles.update","data":{"symbol":"AVAX-USDT","candles":["1638911040","90.11","89.954","90.11","89.938","441.7103","39779.5127417"],"time":1638911078201789417}}
     def can_handle(self, message: str) -> bool:
-        for candle in [f'"topic":"/market/candles:{bc}-{qc}_{res.value}"' for bc, qc, res in self._topics]:
+        for candle in self._topics_pattern:
             if candle in message:
                 return True
         return False
@@ -135,7 +136,10 @@ class MyStrategy(WebSocketMessageHandler):
 
 
 async def scenario(kucoin: KucoinClient):
-    await kucoin.register_strategy_async(MyStrategy([('AVAX', 'USDT', CandleStickResolution._1min)]))
+    await kucoin.register_strategy_async(MyStrategy([('AVAX', 'USDT', CandleStickResolution._1min), ('MANA', 'USDT', CandleStickResolution._1min)]))
+    logger.info('first strategy registered')
+    await kucoin.register_strategy_async(MyStrategy([('BTC', 'USDT', CandleStickResolution._1min)]))
+    logger.info('second strategy registered')
     await asyncio.sleep(15)
     kucoin.cancel_reading()
 

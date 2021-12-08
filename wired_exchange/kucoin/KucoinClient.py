@@ -303,6 +303,7 @@ class KucoinClient(ExchangeClient):
 
     def cancel_reading(self):
         if self._ws is not None:
+            self._logger.debug('stopping web socket')
             self._ws.close()
             self._ws = None
 
