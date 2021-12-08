@@ -24,6 +24,8 @@ from wired_exchange.kucoin import KucoinClient, CandleStickResolution
 from wired_exchange.kucoin.WebSocket import WebSocketMessageHandler
 from wired_exchange.portfolio import Portfolio
 
+from typing import Union
+
 
 async def monitor_tasks():
     while True:
@@ -33,6 +35,7 @@ async def monitor_tasks():
         ]
         [t.print_stack(limit=5) for t in tasks]
         await asyncio.sleep(2)
+
 
 def get_or_create_eventloop():
     try:
@@ -114,7 +117,7 @@ async def main(kucoin):
     await asyncio.gather(*tasks)
 
 
-class MyStrategy(WebSocketMessageHandler):
+class MyCandleStrategy(WebSocketMessageHandler):
     def __init__(self, topics: list[(str, str, CandleStickResolution)]):
         self._topics = topics
         self._logger = logging.getLogger(type(self).__name__)
@@ -135,12 +138,36 @@ class MyStrategy(WebSocketMessageHandler):
         return self._topics
 
 
+class MyTickerStrategy(WebSocketMessageHandler):
+    def __init__(self, tickers: Union[list[(str, str)], None]):
+        self._tickers = tickers
+        self._logger = logging.getLogger(type(self).__name__)
+        if tickers is None:
+            self._tickers_pattern = [f'"topic":"/market/ticker:']
+        else:
+            self._tickers_pattern = [f'"topic":"/market/ticker:{bc}-{qc}"' for bc, qc in self._tickers]
+
+    # {"type":"message","topic":"/market/tickers:AVAX-USDT_1min","subject":"trade.candles.update","data":{"symbol":"AVAX-USDT","candles":["1638911040","90.11","89.954","90.11","89.938","441.7103","39779.5127417"],"time":1638911078201789417}}
+    def can_handle(self, message: str) -> bool:
+        for ticker in self._tickers_pattern:
+            if ticker in message:
+                return True
+        return False
+
+    def handle(self, message: str):
+        self._logger.info(f'processing ticker {message}')
+
+    @property
+    def tickers(self):
+        return self._tickers
+
+
 async def scenario(kucoin: KucoinClient):
-    await kucoin.register_strategy_async(MyStrategy([('AVAX', 'USDT', CandleStickResolution._1min), ('MANA', 'USDT', CandleStickResolution._1min)]))
+    await kucoin.register_candle_strategy_async(MyCandleStrategy([('AVAX', 'USDT', CandleStickResolution._1min), ('MANA', 'USDT', CandleStickResolution._1min)]))
     logger.info('first strategy registered')
-    await kucoin.register_strategy_async(MyStrategy([('BTC', 'USDT', CandleStickResolution._1min)]))
+    await kucoin.register_ticker_strategy_async(MyTickerStrategy(None))
     logger.info('second strategy registered')
-    await asyncio.sleep(120)
+    await asyncio.sleep(15)
     kucoin.stop_reading()
 
 if __name__ == "__main__":
@@ -149,7 +176,7 @@ if __name__ == "__main__":
         # asyncio.run(monitor_tasks())
         # asyncio.run(kucoin.read_topics_async([('AVAX','USDT', CandleStickResolution._1min)]), debug=True)
         # asyncio.run(kucoin.register_strategy_async(MyStrategy([('AVAX', 'USDT', CandleStickResolution._1min)])))
-        asyncio.run(scenario(kucoin), debug=True)
+        asyncio.run(scenario(kucoin))
     # loop = asyncio.get_running_loop()
     # loop.set_debug(True)
     # loop.create_task(monitor_tasks())

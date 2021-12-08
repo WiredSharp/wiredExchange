@@ -8,6 +8,8 @@ import websockets
 
 from wired_exchange.kucoin import CandleStickResolution
 
+from typing import Union
+
 WS_OPEN_TIMEOUT = 10
 WS_CONNECTION_TIMEOUT = 3
 
@@ -102,11 +104,44 @@ class KucoinWebSocket:
         try:
             await self.wait_connection_async()
             subscription_id = random.randint(100000000, 1000000000)
-            self.insert_handler(KlineSubscriptionHandler(subscription_id))
+            self.insert_handler(SubscriptionHandler(subscription_id))
             await self._ws.send(self._new_klines_subscription_message(subscription_id, topics))
-            self._logger.debug('subscription completed')
+            self._logger.debug('kline subscription completed')
         except TimeoutError:
-            self._logger.error('subscription timeout', exc_info=True)
+            self._logger.error('kline subscription timeout', exc_info=True)
+
+    async def subscribe_tickers_async(self, tickers: Union[list[tuple[str, str]], None]):
+        try:
+            await self.wait_connection_async()
+            subscription_id = random.randint(100000000, 1000000000)
+            self.insert_handler(SubscriptionHandler(subscription_id))
+            await self._ws.send(self._new_tickers_subscription_message(subscription_id, tickers))
+            self._logger.debug('ticker subscription completed')
+        except TimeoutError:
+            self._logger.error('ticker subscription timeout', exc_info=True)
+
+    def _new_tickers_subscription_message(self, subscription_id: int,
+                                          tickers: Union[list[tuple[str, str]], None]):
+        if tickers is None:
+            return f"""
+            {{
+            "id": {subscription_id},
+                "type": "subscribe",
+                "topic": "/market/ticker:all",
+                "response": true
+            }}
+            """
+        else:
+            return f"""
+            {{
+            "id": {subscription_id},
+                "type": "subscribe",
+                "topic": "/market/ticker:{','.join([f'{bc}-{qc}' for bc, qc in tickers])}",
+                "response": true
+            }}
+            """
+
+
 
     def _new_klines_subscription_message(self, subscription_id: int,
                                          topics: list[tuple[str, str, CandleStickResolution]]):
@@ -202,7 +237,7 @@ class SinkMessageHandler(WebSocketMessageHandler):
         return True
 
 
-class KlineSubscriptionHandler(WebSocketMessageHandler):
+class SubscriptionHandler(WebSocketMessageHandler):
     def __init__(self, subscription_id: int):
         self.subscription_id = subscription_id
         self._logger = logging.getLogger(type(self).__name__)

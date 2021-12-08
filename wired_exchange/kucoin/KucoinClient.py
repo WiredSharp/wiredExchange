@@ -296,10 +296,15 @@ class KucoinClient(ExchangeClient):
                                    server['pingInterval'], server['pingTimeout'])
         return asyncio.create_task(self._ws.open_async())
 
-    async def register_strategy_async(self, strategy, private: bool = False):
+    async def register_candle_strategy_async(self, strategy, private: bool = False):
         self._open_websocket(private)
         self._ws.insert_handler(strategy)
         await self._ws.subscribe_klines_async(strategy.topics)
+
+    async def register_ticker_strategy_async(self, strategy, private: bool = False):
+        self._open_websocket(private)
+        self._ws.insert_handler(strategy)
+        await self._ws.subscribe_tickers_async(strategy.tickers)
 
     def stop_reading(self):
         if self._ws is not None:
