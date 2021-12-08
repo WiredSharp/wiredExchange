@@ -140,8 +140,8 @@ async def scenario(kucoin: KucoinClient):
     logger.info('first strategy registered')
     await kucoin.register_strategy_async(MyStrategy([('BTC', 'USDT', CandleStickResolution._1min)]))
     logger.info('second strategy registered')
-    await asyncio.sleep(15)
-    kucoin.cancel_reading()
+    await asyncio.sleep(120)
+    kucoin.stop_reading()
 
 if __name__ == "__main__":
     with KucoinClient() as kucoin:

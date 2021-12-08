@@ -31,7 +31,7 @@ class WebSocketMessageHandler:
         one time handler are useful when waiting for acknowledgement"""
         pass
 
-    def notify(self, notification: WebSocketNotification):
+    def on_notification(self, notification: WebSocketNotification):
         pass
 
 
@@ -48,8 +48,8 @@ class KucoinWebSocket:
         self._logger = logging.getLogger(type(self).__name__)
         self._ws = None
         self._connected = asyncio.Event()
-        self._welcomeHandler = self.WelcomeMessageHandler(self._connected)
-        self._handlers = [self._welcomeHandler, SinkMessageHandler()]
+        self._handlers = [PongMessageHandler(self, self._ping_interval, self._ping_timeout),
+                          self.WelcomeMessageHandler(self._connected), SinkMessageHandler()]
         self._state: WebSocketState = WebSocketState.STATE_WS_READY
 
     async def open_async(self):
@@ -73,7 +73,7 @@ class KucoinWebSocket:
                     continue
         finally:
             for handler in self._handlers:
-                handler.notify(WebSocketNotification.CONNECTION_LOST)
+                handler.on_notification(WebSocketNotification.CONNECTION_LOST)
             self._disconnect()
             self._ws = None
             self._state = WebSocketState.STATE_WS_READY
@@ -83,7 +83,7 @@ class KucoinWebSocket:
             try:
                 if self._state == WebSocketState.STATE_WS_CLOSING:
                     break
-                self.handle_message(message)
+                self._handle_message(message)
             except:
                 self._logger.error(f'something goes wrong when processing message: {message}')
 
@@ -91,7 +91,7 @@ class KucoinWebSocket:
         self._handlers.insert(0, handler)
         self._logger.debug(f'{type(handler).__name__}: handler registered')
 
-    def handle_message(self, message):
+    def _handle_message(self, message):
         for handler in self._handlers:
             if handler.can_handle(message):
                 self._logger.debug(f'handler found: {type(handler).__name__}')
@@ -103,13 +103,13 @@ class KucoinWebSocket:
             await self.wait_connection_async()
             subscription_id = random.randint(100000000, 1000000000)
             self.insert_handler(KlineSubscriptionHandler(subscription_id))
-            await self._ws.send(self.new_klines_subscription_message(subscription_id, topics))
+            await self._ws.send(self._new_klines_subscription_message(subscription_id, topics))
             self._logger.debug('subscription completed')
         except TimeoutError:
             self._logger.error('subscription timeout', exc_info=True)
 
-    def new_klines_subscription_message(self, subscription_id: int,
-                                        topics: list[tuple[str, str, CandleStickResolution]]):
+    def _new_klines_subscription_message(self, subscription_id: int,
+                                         topics: list[tuple[str, str, CandleStickResolution]]):
         return f"""
         {{
         "id": {subscription_id},
@@ -130,7 +130,11 @@ class KucoinWebSocket:
         return asyncio.wait_for(self._connected.wait(), timeout)
 
     def close(self):
-        self._state = WebSocketState.STATE_WS_READY
+        self._state = WebSocketState.STATE_WS_CLOSING
+
+    async def send(self, message):
+        await self.wait_connection_async()
+        await self._ws.send(message)
 
     class WelcomeMessageHandler(WebSocketMessageHandler):
         def __init__(self, event: asyncio.Event):
@@ -144,6 +148,46 @@ class KucoinWebSocket:
             self._connected.set()
             self._logger.debug('connection acknowledged by server')
             return True
+
+
+class PongMessageHandler(WebSocketMessageHandler):
+    def __init__(self, ws: KucoinWebSocket, ping_interval: int, ping_timeout: int):
+        self._ws = ws
+        self._ping_interval = ping_interval / 1000 * .95
+        self._ping_timeout = ping_timeout / 1000
+        self._task = asyncio.create_task(self._loop())
+        self._task.set_name('ping_pong')
+        self._pong = asyncio.Event()
+        self._logger = logging.getLogger(type(self).__name__)
+
+    async def _loop(self):
+        while True:
+            try:
+                await self._send_ping_message()
+                await asyncio.wait_for(self._pong.wait(), self._ping_timeout)
+                self._pong.clear()
+                await asyncio.sleep(self._ping_interval)
+            except TimeoutError:
+                self._logger.warning('ping timeout reached without pong')
+                continue
+            except asyncio.CancelledError:
+                self._logger.warning('ping handler stopped')
+                break
+
+    def can_handle(self, message):
+        return f'"type":"pong"' in message
+
+    def handle(self, message):
+        self._pong.set()
+        return True
+
+    def on_notification(self, notification: WebSocketNotification):
+        if notification == WebSocketNotification.CONNECTION_LOST:
+            self._task.cancel()
+
+    def _send_ping_message(self):
+        message_id = random.randint(100000000, 1000000000)
+        return self._ws.send(f'{{ "id":{message_id},"type":"ping" }}')
 
 
 class SinkMessageHandler(WebSocketMessageHandler):

@@ -301,7 +301,7 @@ class KucoinClient(ExchangeClient):
         self._ws.insert_handler(strategy)
         await self._ws.subscribe_klines_async(strategy.topics)
 
-    def cancel_reading(self):
+    def stop_reading(self):
         if self._ws is not None:
             self._logger.debug('stopping web socket')
             self._ws.close()
