@@ -4,11 +4,12 @@ import functools
 import hashlib
 import hmac
 import time
-from datetime import datetime
-from typing import Literal
+from datetime import datetime, timedelta
+from typing import Literal, Union
 
 import httpx
 import pandas as pd
+import tzlocal
 from pandas import DataFrame
 
 from wired_exchange.core import to_timestamp, to_transactions, to_klines
@@ -56,34 +57,57 @@ class KucoinClient(ExchangeClient):
         except httpx.HTTPStatusError as ex:
             raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
 
-    def get_orders(self, start_time=None, end_time=None, trade_type: Literal['spot', 'margin'] = 'spot',
-                   status: Literal['done', 'active'] = None):
+    def get_orders(self, symbol: str = None, start_time: Union[datetime, int, float, type(None)] = None,
+                   end_time: Union[datetime, int, float, type(None)] = None,
+                   trade_type: Literal['spot', 'margin'] = 'spot',
+                   status: Literal['done', 'active'] = None,
+                   side: Literal['buy', 'sell'] = None) -> pd.DataFrame:
         self.open()
         params = {'tradeType': 'MARGIN_TRADE' if trade_type.lower() == 'margin' else 'TRADE'}
+        if symbol is not None:
+            params['symbol'] = symbol
         if status is not None:
             params['status'] = status
-        self._add_date_range_params(params, start_time, end_time)
+        if side is not None:
+            params['side'] = side
         try:
-            request = self._httpClient.build_request('GET', '/v1/orders', params=params)
-            self._authenticate(request)
-            response = self._httpClient.send(request)
-            response.json()
+            last_query = False
+            orders = None
+            while not last_query:
+                if start_time is not None and end_time is None:
+                    end_time = start_time + timedelta(days=7)
+                    last_query = end_time >= datetime.now(tzlocal.get_localzone())
+                    self._add_date_range_params(params, start_time, end_time, 'ms')
+                    start_time = end_time
+                    end_time = None
+                else:
+                    last_query = True
+                    self._add_date_range_params(params, start_time, end_time, 'ms')
+                current_orders = self._read_pages('/v1/orders', params=params, authenticated=True)
+                if len(current_orders) > 0:
+                    if orders is None:
+                        orders = pd.DataFrame(current_orders)
+                    else:
+                        orders = orders.append(pd.DataFrame(current_orders), ignore_index=True)
+            return self._to_orders(orders)
         except httpx.HTTPStatusError as ex:
             raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
 
-    def get_prices_history(self, base: str, quote: str,
-                           resolution: CandleStickResolution, start_time=None, end_time=None) -> pd.DataFrame:
+    def get_prices_history(self, base_currency: str, quote_currency: str, resolution: int,
+                           start_time: Union[datetime, int, float],
+                           end_time: Union[datetime, int, float, type(None)] = None) -> pd.DataFrame:
         self.open()
         # For each query, the system would return at most **1500** pieces of data. To obtain more data, please page
         # the data by time.
-        params = dict(symbol=f'{base}-{quote}', type=resolution.value)
+        params = dict(symbol=f'{base_currency}-{quote_currency}',
+                      type=CandleStickResolution.from_seconds(resolution).value)
         self._add_date_range_params(params, start_time, end_time, 's')
         try:
             request = self._httpClient.build_request('GET', '/v1/market/candles', params=params)
             response = self._httpClient.send(request).json()
             if not response['code'].startswith('200'):
                 raise RuntimeError(f'{response["code"]}: response code does not indicate a success')
-            return self._to_klines(response['data'], base, quote)
+            return self._to_klines(response['data'], base_currency, quote_currency)
         except httpx.HTTPStatusError as ex:
             raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
 
@@ -225,7 +249,7 @@ class KucoinClient(ExchangeClient):
         except httpx.HTTPStatusError as ex:
             raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
 
-    def _to_account_operations(self, deposits, withdrawals):
+    def _to_account_operations(self, deposits: pd.DataFrame, withdrawals: pd.DataFrame):
         operations = deposits.append(withdrawals, ignore_index=True)
         operations['updatedAt'] = pd.to_datetime(operations['updatedAt'], unit='ms', utc=True)
         operations['platform'] = self.platform
@@ -242,9 +266,9 @@ class KucoinClient(ExchangeClient):
         try:
             return self._read_pages('/v1/hist-orders', params, authenticated=True)
         except httpx.HTTPStatusError as ex:
-            raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
+            raise RuntimeError('cannot retrieve orders v1 from Kucoin') from ex
 
-    def _read_pages(self, path, params, authenticated, aggregated=True):
+    def _read_pages(self, path: str, params: dict, authenticated: bool, aggregated: bool = True):
         pages = self._get_pages(path, params, authenticated)
         if aggregated:
             return self._aggregate_pages(pages)
@@ -262,7 +286,7 @@ class KucoinClient(ExchangeClient):
             response = self._httpClient.send(request)
             json = response.json()
             if not json['code'].startswith('200'):
-                raise RuntimeError(f'{json["code"]}: response code does not indicate a success')
+                raise RuntimeError(f'{json["msg"]} ({json["code"]}): response code does not indicate a success')
             total_pages = json['data']['totalPage']
             remaining_pages = params['current_page'] < total_pages
             if json['data']['totalNum'] > 0:
@@ -321,3 +345,9 @@ class KucoinClient(ExchangeClient):
             params['endAt'] = to_timestamp(end_time, precision) if isinstance(end_time, datetime) else int(
                 round(end_time))
         return params
+
+    def _to_orders(self, orders: pd.DataFrame):
+        if orders.size == 0:
+            return orders
+        orders['createdAt'] = pd.to_datetime(orders['createdAt'], unit='ms', utc=True)
+        return orders

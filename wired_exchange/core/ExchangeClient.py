@@ -1,9 +1,14 @@
 import logging
 import os
 
+from datetime import datetime
+
 import httpx
+import pandas as pd
 
 from wired_exchange.core import VERSION, config
+
+from typing import Union
 
 
 def raise_on_4xx_5xx(response):
@@ -65,3 +70,8 @@ class ExchangeClient:
     def _log_response(self, response):
         request = response.request
         self._logger.debug(f"Response event hook: {request.method} {request.url} - Status {response.status_code}")
+
+    def get_prices_history(self, base_currency: str, quote_currency: str, resolution: int,
+                           start_time: Union[datetime, int, float],
+                           end_time: Union[datetime, int, float, type(None)] = None) -> pd.DataFrame:
+        raise NotImplementedError('to be implemented in derived class')

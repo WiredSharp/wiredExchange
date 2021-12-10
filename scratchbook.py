@@ -8,8 +8,7 @@ from logging.config import fileConfig
 
 import tzlocal
 from dotenv import load_dotenv
-from datetime import datetime
-
+from datetime import datetime, timedelta
 
 import pandas as pd
 import sqlalchemy
@@ -46,6 +45,7 @@ def get_or_create_eventloop():
             asyncio.set_event_loop(loop)
             return asyncio.get_event_loop()
 
+
 kucoin_sandbox = False
 
 if kucoin_sandbox:
@@ -59,6 +59,7 @@ logging.config.fileConfig('logging.conf')
 
 logger = logging.getLogger('main')
 logger.info('--------------------- starting Wired Exchange ---------------------')
+
 
 # shutil.copyfile('\\'.join([notebook_folder, 'ftx_transactions.json']), 'data/ftx_transactions.json')
 # shutil.copyfile('\\'.join([notebook_folder, 'kucoin_transactions.json']), 'data/kucoin_transactions.json')
@@ -105,6 +106,7 @@ async def shutdown(signal, loop):
     await asyncio.gather(*tasks)
     loop.stop()
 
+
 async def main(kucoin):
     # Not supported under windows
     # May want to catch other signals too
@@ -113,7 +115,7 @@ async def main(kucoin):
     #     loop.add_signal_handler(
     #         s, lambda s=s: asyncio.create_task(shutdown(s, loop)))
     tasks = [asyncio.create_task(monitor_tasks()),
-             asyncio.create_task(kucoin.read_topics_async([('AVAX', 'USDT', CandleStickResolution._1min)]))]
+             asyncio.create_task(kucoin.read_topics_async([('AVAX', 'USDT', CandleStickResolution.MIN_1)]))]
     await asyncio.gather(*tasks)
 
 
@@ -163,12 +165,14 @@ class MyTickerStrategy(WebSocketMessageHandler):
 
 
 async def scenario(kucoin: KucoinClient):
-    await kucoin.register_candle_strategy_async(MyCandleStrategy([('AVAX', 'USDT', CandleStickResolution._1min), ('MANA', 'USDT', CandleStickResolution._1min)]))
+    await kucoin.register_candle_strategy_async(MyCandleStrategy(
+        [('AVAX', 'USDT', CandleStickResolution.MIN_1), ('MANA', 'USDT', CandleStickResolution.MIN_1)]))
     logger.info('first strategy registered')
     await kucoin.register_ticker_strategy_async(MyTickerStrategy(None))
     logger.info('second strategy registered')
     await asyncio.sleep(15)
     kucoin.stop_reading()
+
 
 if __name__ == "__main__":
     with KucoinClient() as kucoin:
@@ -176,7 +180,11 @@ if __name__ == "__main__":
         # asyncio.run(monitor_tasks())
         # asyncio.run(kucoin.read_topics_async([('AVAX','USDT', CandleStickResolution._1min)]), debug=True)
         # asyncio.run(kucoin.register_strategy_async(MyStrategy([('AVAX', 'USDT', CandleStickResolution._1min)])))
-        asyncio.run(scenario(kucoin))
+        # print(kucoin.get_prices_history('AVAX', 'USDT', CandleStickResolution.to_seconds(CandleStickResolution.HOUR_4),
+        #                           datetime.fromisoformat('2021-11-10T21:53:00+01:00')))
+        print(kucoin.get_orders(start_time=datetime.now(tzlocal.get_localzone()) - timedelta(days=40)))
+        # print(kucoin.get_orders())
+        # asyncio.run(scenario(kucoin))
     # loop = asyncio.get_running_loop()
     # loop.set_debug(True)
     # loop.create_task(monitor_tasks())
@@ -201,7 +209,7 @@ if __name__ == "__main__":
 
 # wallet = Portfolio('EBL')
 #
-#wallet.import_account_operations(datetime.fromisoformat('2021-11-10T18:53:00+01:00'))
+# wallet.import_account_operations(datetime.fromisoformat('2021-11-10T18:53:00+01:00'))
 # wallet.import_account_operations()
 # wallet.import_transactions(datetime.fromisoformat('2021-12-04T18:53:00+01:00'))
 # wallet.get_summary().to_csv('data/positions.csv')

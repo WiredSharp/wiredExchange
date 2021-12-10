@@ -72,9 +72,8 @@ class FTXClient(ExchangeClient):
         except httpx.HTTPStatusError as ex:
             raise Exception('cannot retrieve transactions from FTX') from ex
 
-    def get_prices_history(self, base_currency: str, quote_currency: str,
-                           start_time: Union[datetime, int, float], end_time: Union[datetime, int, float],
-                           resolution: int):
+    def get_prices_history(self, base_currency: str, quote_currency: str, resolution: int,
+                           start_time: Union[datetime, int, float], end_time: Union[datetime, int, float, None] = None):
         self.open()
         params = {'resolution': resolution}
         self._add_date_range_params(params, start_time, end_time, precision='s')
@@ -129,8 +128,8 @@ class FTXClient(ExchangeClient):
             tr[tr['quote_currency'] != 'USD'].groupby(['quote_currency']).agg(['min', 'max'])[
                 'time']).itertuples():
             try:
-                new_prices = self.get_prices_history(priceRange.Index, 'USD', priceRange.min, priceRange.max,
-                                                     RESOLUTION)
+                new_prices = self.get_prices_history(priceRange.Index, 'USD', RESOLUTION, priceRange.min,
+                                                     priceRange.max)
                 if prices is None:
                     prices = new_prices
                 else:
