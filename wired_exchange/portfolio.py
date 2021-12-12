@@ -1,6 +1,7 @@
 import logging
 
 import pandas as pd
+from collections import namedtuple
 from datetime import datetime
 from wired_exchange import FTXClient, KucoinClient, WiredStorage
 from wired_exchange.core import to_transactions
@@ -36,7 +37,7 @@ class Portfolio:
                 kucoin_ops = kucoin.get_account_operations(start_time)
                 if kucoin_ops.size > 0:
                     ops = pd.DataFrame(kucoin_ops[kucoin_ops['status'] == 'SUCCESS'],
-                                      columns=['size', 'base_currency', 'id', 'type', 'platform', 'time'])
+                                       columns=['size', 'base_currency', 'id', 'type', 'platform', 'time'])
             except:
                 self._logger.error('cannot retrieve operations from Kucoin', exc_info=True)
         with FTXClient() as ftx:
@@ -44,7 +45,7 @@ class Portfolio:
                 ftx_ops = ftx.get_account_operations(start_time)
                 if ftx_ops.size > 0:
                     ftx_ops = pd.DataFrame(ftx_ops[ftx_ops['status'].isin(['confirmed', 'complete'])],
-                                       columns=['size', 'base_currency', 'id', 'type', 'platform', 'time'])
+                                           columns=['size', 'base_currency', 'id', 'type', 'platform', 'time'])
                     if ops is not None:
                         ops = ops.append(ftx_ops)
                     else:
@@ -91,18 +92,39 @@ class Portfolio:
         tr = self.get_transaction()
         if tr.size == 0:
             return tr
-        buy_trs = tr['side'] == 'buy'
-        orders = tr['type'].isin(['order', 'limit', 'market'])
-        quote_currencies = tr['base_currency'].isin(['USD', 'USDT'])
-        tr['amount'] = tr['size'] * tr['price']
-        tr['amount_usd'] = tr['amount'] * tr['price_usd']
-        by_currencies = tr[buy_trs & orders & (~quote_currencies)].groupby('base_currency')
-        size_sum = by_currencies['size'].sum()
-        average_prices = by_currencies['amount'].sum() / size_sum
-        average_usd_prices = by_currencies['amount_usd'].sum() / size_sum
-        average_prices = pd.concat([average_prices, average_usd_prices], axis=1)
-        average_prices.rename(columns={0: 'average_buy_price', 1: 'average_buy_price_usd'}, inplace=True)
-        return average_prices
+        tr.dropna(subset=['side'], inplace=True)
+        tr.sort_values(by=['time'], inplace=True)
+        quote_currencies = tr['base_currency'].isin(['USD', 'USDT', 'CHF'])
+        positions = {}
+        Position = namedtuple('Position', ['size', 'price', 'price_usd'])
+        for transaction in tr[~quote_currencies].itertuples():
+            position = positions.get(transaction.base_currency)
+            if position is None:
+                position = Position(transaction.size, transaction.price, transaction.price_usd * transaction.price)
+            else:
+                if transaction.side == 'sell':
+                    position = Position(position.size - transaction.size, position.price, position.price_usd)
+                else:  # buy
+                    position = Position(position.size + transaction.size,
+                                        (position.size * position.price + transaction.size * transaction.price)
+                                        / (position.size + transaction.size),
+                                        transaction.price_usd *
+                                        (position.size * position.price + transaction.size * transaction.price)
+                                        / (position.size + transaction.size))
+            positions[transaction.base_currency] = position
+
+        # orders = tr['type'].isin(['order', 'limit', 'market'])
+        # quote_currencies = tr['base_currency'].isin(['USD', 'USDT', 'CHF'])
+        # tr['amount'] = np.where(tr['side'] == 'buy', tr['size']*tr['price'], np.nan)
+        # tr['amount_usd'] = tr['amount'] * tr['price_usd']
+        # by_currencies = tr[orders & (~quote_currencies)].groupby('base_currency')
+        # size_sum = by_currencies['size'].sum()
+        # average_prices = by_currencies['amount'].sum() / size_sum
+        # average_usd_prices = by_currencies['amount_usd'].sum() / size_sum
+        # average_prices = pd.concat([average_prices, average_usd_prices], axis=1)
+        # average_prices.rename(columns={0: 'average_buy_price', 1: 'average_buy_price_usd'}, inplace=True)
+        return pd.DataFrame(positions.values(), index=positions.keys(),
+                            columns=['size', 'average_buy_price', 'average_buy_price_usd'])
 
     def get_summary(self):
         p = self.get_positions()
