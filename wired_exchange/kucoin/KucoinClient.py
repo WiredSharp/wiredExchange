@@ -351,3 +351,4 @@ class KucoinClient(ExchangeClient):
             return orders
         orders['createdAt'] = pd.to_datetime(orders['createdAt'], unit='ms', utc=True)
         return orders
+

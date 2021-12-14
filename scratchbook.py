@@ -175,14 +175,19 @@ async def scenario(kucoin: KucoinClient):
 
 
 if __name__ == "__main__":
-    with KucoinClient() as kucoin:
-        # loop = get_or_create_eventloop()
-        # asyncio.run(monitor_tasks())
-        # asyncio.run(kucoin.read_topics_async([('AVAX','USDT', CandleStickResolution._1min)]), debug=True)
-        # asyncio.run(kucoin.register_strategy_async(MyStrategy([('AVAX', 'USDT', CandleStickResolution._1min)])))
-        # print(kucoin.get_prices_history('AVAX', 'USDT', CandleStickResolution.to_seconds(CandleStickResolution.HOUR_4),
-        #                           datetime.fromisoformat('2021-11-10T21:53:00+01:00')))
-        print(kucoin.get_orders(start_time=datetime.now(tzlocal.get_localzone()) - timedelta(days=40)))
+    wallet = Portfolio('EBL')
+    # wallet.import_transactions(start_time=datetime.now(tzlocal.get_localzone()) - timedelta(days=7))
+    print(wallet.get_summary()['average_buy_price_usd'])
+
+    # with KucoinClient() as kucoin:
+    #     # loop = get_or_create_eventloop()
+    #     # asyncio.run(monitor_tasks())
+    #     # asyncio.run(kucoin.read_topics_async([('AVAX','USDT', CandleStickResolution._1min)]), debug=True)
+    #     # asyncio.run(kucoin.register_strategy_async(MyStrategy([('AVAX', 'USDT', CandleStickResolution._1min)])))
+    #     # print(kucoin.get_prices_history('AVAX', 'USDT', CandleStickResolution.to_seconds(CandleStickResolution.HOUR_4),
+    #     #                           datetime.fromisoformat('2021-11-10T21:53:00+01:00')))
+    #
+    #     print(kucoin.get_orders(start_time=datetime.now(tzlocal.get_localzone()) - timedelta(days=40)))
         # print(kucoin.get_orders())
         # asyncio.run(scenario(kucoin))
     # loop = asyncio.get_running_loop()

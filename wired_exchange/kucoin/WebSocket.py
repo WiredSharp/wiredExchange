@@ -87,7 +87,7 @@ class KucoinWebSocket:
                     break
                 self._handle_message(message)
             except:
-                self._logger.error(f'something goes wrong when processing message: {message}')
+                self._logger.error(f'something goes wrong when processing message: {message}', exc_info=True)
 
     def insert_handler(self, handler: WebSocketMessageHandler):
         self._handlers.insert(0, handler)
