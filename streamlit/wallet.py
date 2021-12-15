@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from wired_exchange.portfolio import Portfolio
 import streamlit as st
 
+from datetime import date
 import glob
 
 logging.config.fileConfig('logging.conf')
@@ -34,7 +35,15 @@ if st.button('Update Wallet'):
 
 st.title(f'{profile} Wallet')
 summary = wallet.get_summary()
+summary = summary[(summary['total'] > .0001) & (summary.index != 'USDT') & (summary.index != 'USD')]
+st.text("Positions:")
 st.dataframe(summary[['total', 'available', 'PnL_pc', 'average_buy_price', 'price',
                       'PnL_tt', 'average_buy_price_usd', 'price_usd']]
              .style.applymap(foreground_by_sign, subset=['PnL_pc', 'PnL_tt']))
+
+st.text("last completed transactions:")
+transactions = wallet.get_transaction()[['base_currency', 'time', 'side', 'price', 'size']]
+transactions.set_index('base_currency', inplace=True)
+st.dataframe(transactions.head(8))
+
 logger.info('--------------------- Wired Exchange Terminated ---------------------')

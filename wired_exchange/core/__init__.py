@@ -54,7 +54,7 @@ def to_transactions(tr) -> pd.DataFrame:
              fee_currency='string', price='float', size='float', fee='float', platform='string'))
     if 'id' in tr.columns:
         tr.set_index('id', inplace=True)
-    return tr.sort_values(by='time')
+    return tr.sort_values(by='time', ascending=False)
 
 
 def read_klines(path_or_buf, base: str = None, quote: str = None) -> pd.DataFrame:
