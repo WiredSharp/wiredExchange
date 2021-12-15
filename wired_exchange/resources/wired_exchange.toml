@@ -3,3 +3,4 @@
 url= "https://ftx.com/api"
 [exchanges.kucoin]
 url= "https://api.kucoin.com/api"
+[exchanges.binance]

@@ -24,7 +24,7 @@ class ExchangeClient:
         self.always_authenticate = always_authenticate
         self._api_key = api_key if api_key is not None else self._get_exchange_env_value('api_key')
         self._api_secret = api_secret if api_secret is not None else self._get_exchange_env_value('api_secret')
-        self.host_url = host_url if host_url is not None else self._get_exchange_config()['url']
+        self.host_url = host_url if host_url is not None else self._get_exchange_config().get('url')
 
     def _get_exchange_env_value(self, key: str):
         return os.getenv(f'{self.platform}_{key}')
