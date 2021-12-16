@@ -176,10 +176,15 @@ async def scenario(kucoin: KucoinClient):
 
 if __name__ == "__main__":
     wallet = Portfolio('EBL')
+    print(wallet.get_orders())
     # wallet.import_transactions(start_time=datetime.now(tzlocal.get_localzone()) - timedelta(days=7))
-    print(wallet.get_summary()['average_buy_price_usd'])
+    # print(wallet.get_summary()['average_buy_price_usd'])
 
     # with KucoinClient() as kucoin:
+    #     print(kucoin.get_orders(status='active', start_time= datetime.fromisoformat('2021-11-10T21:53:00+01:00')))
+    #
+    # with FTXClient() as ftx:
+    #     print(ftx.get_orders())
     #     # loop = get_or_create_eventloop()
     #     # asyncio.run(monitor_tasks())
     #     # asyncio.run(kucoin.read_topics_async([('AVAX','USDT', CandleStickResolution._1min)]), debug=True)

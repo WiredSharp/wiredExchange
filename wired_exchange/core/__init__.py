@@ -2,12 +2,11 @@ import os
 
 import pandas as pd
 import pytomlpp
-from datetime import datetime
 
 resource_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 config_path = os.path.join(resource_path, 'wired_exchange.toml')
 
-VERSION = '1.0.0'
+VERSION = '1.3.2'
 
 with open(config_path, 'r') as cfg:
     _config = pytomlpp.load(cfg)

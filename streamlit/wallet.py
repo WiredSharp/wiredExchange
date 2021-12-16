@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 
+import wired_exchange.core
 from wired_exchange.binance import BinanceClient
 from wired_exchange.portfolio import Portfolio
 import streamlit as st
@@ -37,10 +38,12 @@ if profile == 'EBL':
                           'PnL_tt', 'average_buy_price_usd', 'price_usd']]
                  .style.applymap(foreground_by_sign, subset=['PnL_pc', 'PnL_tt']))
 
-    st.text("last completed transactions:")
-    transactions = wallet.get_transaction()[['base_currency', 'time', 'side', 'price', 'size']]
-    transactions.set_index('base_currency', inplace=True)
-    st.dataframe(transactions.head(8))
+    st.text("last orders:")
+    orders = wallet.get_orders()[['base_currency', 'side', 'price', 'size', 'status', 'time']]
+    orders.set_index('base_currency', inplace=True)
+    # transactions = wallet.get_transaction()[['base_currency', 'time', 'side', 'price', 'size']]
+    # transactions.set_index('base_currency', inplace=True)
+    st.dataframe(orders.head(8))
 else:
     if profile == 'POL':
         st.title(f'{profile} Wallet')
@@ -48,7 +51,9 @@ else:
         st.text("Positions:")
         balances = binance.get_balances()
         st.dataframe(balances[(balances['total'] > .0001) & (balances.index != 'USDT') & (balances.index != 'USD')])
-        st.text("last completed transactions:")
-        transactions = binance.get_transactions()[['base_currency', 'price', 'size', 'amount', 'status', 'side', 'time']]
+        st.text("last orders:")
+        transactions = binance.get_transactions()[['base_currency', 'side', 'price', 'size', 'amount', 'status', 'time']]
         transactions.set_index('base_currency', inplace=True)
         st.dataframe(transactions.head(8))
+
+st.text(f'wired_exchange v{wired_exchange.core.VERSION}')

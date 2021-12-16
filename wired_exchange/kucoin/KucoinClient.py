@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Literal, Union
 
 import httpx
+import numpy as np
 import pandas as pd
 import tzlocal
 from pandas import DataFrame
@@ -89,7 +90,18 @@ class KucoinClient(ExchangeClient):
                         orders = pd.DataFrame(current_orders)
                     else:
                         orders = orders.append(pd.DataFrame(current_orders), ignore_index=True)
-            return self._to_orders(orders)
+                current_orders = self._read_pages('/v1/stop-order', params=params, authenticated=True)
+                if len(current_orders) > 0:
+                    if orders is None:
+                        orders = pd.DataFrame(current_orders)
+                    else:
+                        orders = orders.append(pd.DataFrame(current_orders), ignore_index=True)
+            if orders is not None:
+                if 'cancelExist' in orders.columns:
+                    orders = orders[orders['cancelExist'] != True]
+                return self._to_orders(orders)
+            else:
+                return pd.DataFrame()
         except httpx.HTTPStatusError as ex:
             raise RuntimeError('cannot retrieve transactions from Kucoin') from ex
 
@@ -232,7 +244,8 @@ class KucoinClient(ExchangeClient):
         tickers.takerCoefficient = pd.to_numeric(tickers.takerCoefficient)
         return tickers
 
-    def get_account_operations(self, start_time=None, end_time=None) -> pd.DataFrame:
+    def get_account_operations(self, start_time: Union[datetime, int, float, type(None)] = None,
+                               end_time: Union[datetime, int, float, type(None)] = None) -> pd.DataFrame:
         self.open()
         params = {}
         self._add_date_range_params(params, start_time, end_time, 'ms')
@@ -257,7 +270,8 @@ class KucoinClient(ExchangeClient):
                                        amount='size', currency='base_currency'), inplace=True)
         return operations
 
-    def get_orders_v1(self, symbol=None, start_time=None, end_time=None) -> pd.DataFrame:
+    def get_orders_v1(self, symbol=None, start_time: Union[datetime, int, float, type(None)] = None,
+                      end_time: Union[datetime, int, float, type(None)] = None) -> pd.DataFrame:
         self.open()
         params = dict(pageSize=200)
         if symbol is not None:
@@ -337,7 +351,8 @@ class KucoinClient(ExchangeClient):
             self._ws = None
 
     @staticmethod
-    def _add_date_range_params(params: dict, start_time, end_time, precision) -> dict:
+    def _add_date_range_params(params: dict, start_time: Union[datetime, int, float, type(None)],
+                               end_time: Union[datetime, int, float, type(None)], precision) -> dict:
         if start_time is not None:
             params['startAt'] = to_timestamp(start_time, precision) if isinstance(start_time, datetime) else int(
                 round(start_time))
@@ -349,6 +364,20 @@ class KucoinClient(ExchangeClient):
     def _to_orders(self, orders: pd.DataFrame):
         if orders.size == 0:
             return orders
-        orders['createdAt'] = pd.to_datetime(orders['createdAt'], unit='ms', utc=True)
+        orders.loc[:, 'time'] = pd.to_datetime(orders['createdAt'], unit='ms', utc=True)
+        orders.loc[:, 'base_currency'] = orders['symbol'].apply(lambda s: s.split('-')[0])
+        orders.loc[:, 'quote_currency'] = orders['symbol'].apply(lambda s: s.split('-')[1])
+        if 'fee' in orders.columns:
+            orders = orders.loc[:, ('id', 'base_currency', 'quote_currency', 'type', 'side', 'price',
+                                    'size', 'status', 'fee', 'feeCurrency', 'time')]
+            orders.loc[:, 'fee'] = pd.to_numeric(orders['fee'])
+        else:
+            orders = orders.loc[:, ('id', 'base_currency', 'quote_currency', 'type', 'side', 'price',
+                                    'size', 'status', 'feeCurrency', 'time')]
+        orders.loc[:, 'price'] = pd.to_numeric(orders['price'])
+        orders.loc[:, 'size'] = pd.to_numeric(orders['size'])
+        orders.astype(dict(status='string'))
+        orders.loc[:, 'status'].fillna('FILLED', inplace=True)
+        orders.rename(columns={'feeCurrency': 'fee_currency'})
+        orders.loc[:, 'platform'] = self.platform
         return orders
-

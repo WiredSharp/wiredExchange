@@ -141,6 +141,19 @@ class FTXClient(ExchangeClient):
         tr['fee_usd'] = tr.apply(lambda row: _find_price(row.fee_currency, prices, row.time), axis='columns')
         return tr, prices
 
+    def get_orders(self, start_time: Union[datetime, int, float, None] = None,
+                   end_time: Union[datetime, int, float, None] = None):
+        self.open()
+        params = {}
+        self._add_date_range_params(params, start_time, end_time, precision='s')
+        try:
+            response = self._send_get(f'/orders/history', params=params, authenticated=True)
+            return self._to_orders(response['result'])
+
+        except BaseException as ex:
+            raise Exception(
+                'cannot retrieve orders from FTX') from ex
+
     # {
     #     "id": 5025968617,
     #     "market": "BTC\/USDT",
@@ -257,6 +270,17 @@ class FTXClient(ExchangeClient):
         operations.rename(columns=dict(coin='base_currency', txid='id'), inplace=True)
         return operations
 
+    def _to_orders(self, orders: dict):
+        frame = pd.DataFrame(orders)
+        frame.loc[:, 'base_currency'] = frame['market'].apply(lambda s: s.split('/')[0])
+        frame.loc[:, 'quote_currency'] = frame['market'].apply(lambda s: s.split('/')[1])
+        frame['time'] = pd.to_datetime(frame['createdAt'])
+        frame = frame.loc[:, ('id', 'base_currency', 'quote_currency', 'type', 'side', 'price',
+                              'size', 'status', 'time')]
+        frame['platform'] = self.platform
+        frame.astype(dict(price='float', size='float'))
+        return frame
+
     @staticmethod
     def _add_date_range_params(params: dict, start_time, end_time, precision) -> dict:
         if start_time is not None:
@@ -266,4 +290,3 @@ class FTXClient(ExchangeClient):
             params['end_time'] = to_timestamp(end_time, precision) if isinstance(end_time, datetime) else int(
                 round(end_time))
         return params
-    

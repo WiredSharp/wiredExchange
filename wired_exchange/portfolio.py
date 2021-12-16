@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 from collections import namedtuple
 from datetime import datetime
+from typing import Union
 from wired_exchange import FTXClient, KucoinClient, WiredStorage
 from wired_exchange.core import to_transactions
 
@@ -137,5 +138,41 @@ class Portfolio:
         summary['PnL_tt'] = (summary['price_usd'] - summary['average_buy_price_usd']) * summary['total']
         return summary
 
+    def get_orders(self, start_time: Union[datetime, int, float, type(None)] = None):
+        if start_time is None:
+            start_time = self._get_first_transaction_time()
+        ops = None
+        with KucoinClient() as kucoin:
+            try:
+                kucoin_ops = kucoin.get_orders(start_time=start_time, status='done')
+                if kucoin_ops.size > 0:
+                    ops = pd.DataFrame(kucoin_ops)
+                kucoin_ops = kucoin.get_orders(start_time=start_time, status='active')
+                if kucoin_ops.size > 0:
+                    if ops is not None:
+                        ops = ops.append(kucoin_ops)
+                    else:
+                        ops = kucoin_ops
+            except:
+                self._logger.error('cannot retrieve orders from Kucoin', exc_info=True)
+        with FTXClient() as ftx:
+            try:
+                ftx_ops = ftx.get_orders(start_time)
+                if ftx_ops.size > 0:
+                    if ops is not None:
+                        ops = ops.append(ftx_ops)
+                    else:
+                        ops = ftx_ops
+            except:
+                self._logger.error('cannot retrieve orders from FTX', exc_info=True)
+        if ops is not None:
+            ops['id'] = ops.apply(lambda row: f'{row["platform"]}_{row["id"]}', axis=1)
+            # ops.set_index('id', inplace=True)
+            ops.sort_values(by=['time'], ascending=False, inplace=True)
+        return ops
+
     def _get_last_transaction_time(self) -> datetime:
         return self._db.read_transactions()['time'].max()
+
+    def _get_first_transaction_time(self) -> datetime:
+        return self._db.read_transactions()['time'].min()
