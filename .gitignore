@@ -116,3 +116,7 @@ fabric.properties
 /*.sqlite
 
 __pycache__/
+.env*
+/.ipynb_checkpoints
+/.idea
+/Data
