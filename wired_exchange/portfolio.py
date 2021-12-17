@@ -166,6 +166,7 @@ class Portfolio:
             except:
                 self._logger.error('cannot retrieve orders from FTX', exc_info=True)
         if ops is not None:
+            ops.drop_duplicates(subset=['id'], inplace=True)
             ops['id'] = ops.apply(lambda row: f'{row["platform"]}_{row["id"]}', axis=1)
             # ops.set_index('id', inplace=True)
             ops.sort_values(by=['time'], ascending=False, inplace=True)

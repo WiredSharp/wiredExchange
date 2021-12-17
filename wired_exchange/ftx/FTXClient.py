@@ -277,6 +277,7 @@ class FTXClient(ExchangeClient):
         frame['time'] = pd.to_datetime(frame['createdAt'])
         frame = frame.loc[:, ('id', 'base_currency', 'quote_currency', 'type', 'side', 'price',
                               'size', 'status', 'time')]
+        frame['status'].replace('closed', 'FILLED', inplace=True)
         frame['platform'] = self.platform
         frame.astype(dict(price='float', size='float'))
         return frame

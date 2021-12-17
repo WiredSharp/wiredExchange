@@ -43,7 +43,7 @@ if profile == 'EBL':
     orders.set_index('base_currency', inplace=True)
     # transactions = wallet.get_transaction()[['base_currency', 'time', 'side', 'price', 'size']]
     # transactions.set_index('base_currency', inplace=True)
-    st.dataframe(orders.head(8))
+    st.dataframe(orders.head(15))
 else:
     if profile == 'POL':
         st.title(f'{profile} Wallet')
@@ -54,6 +54,6 @@ else:
         st.text("last orders:")
         transactions = binance.get_transactions()[['base_currency', 'side', 'price', 'size', 'amount', 'status', 'time']]
         transactions.set_index('base_currency', inplace=True)
-        st.dataframe(transactions.head(8))
+        st.dataframe(transactions.head(15))
 
 st.text(f'wired_exchange v{wired_exchange.core.VERSION}')
