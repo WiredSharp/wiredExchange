@@ -5,8 +5,11 @@ WORKDIR /usr/src/app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY ./.env ./.env-EBL
+COPY ./.env-polene ./.env-POL
 COPY ./wired_exchange wired_exchange/
 COPY ./streamlit .
+
 
 ENV STREAMLIT_SERVER_PORT=80
 EXPOSE 80
