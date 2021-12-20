@@ -4,8 +4,10 @@ import pandas as pd
 from collections import namedtuple
 from datetime import datetime
 from typing import Union
-from wired_exchange import FTXClient, KucoinClient, WiredStorage
+from wired_exchange import WiredStorage, KucoinSpotClient
+from wired_exchange.ftx import FTXClient
 from wired_exchange.core import to_transactions
+from wired_exchange.kucoin import KucoinFuturesClient
 
 
 class Portfolio:
@@ -19,7 +21,7 @@ class Portfolio:
             start_time = self._get_last_transaction_time()
         with FTXClient() as ftx:
             tr = ftx.get_transactions(start_time=start_time)
-            with KucoinClient() as kucoin:
+            with KucoinSpotClient() as kucoin:
                 try:
                     kucoin_tr, _ = ftx.enrich_usd_prices(
                         kucoin.get_transactions(start_time=start_time))
@@ -33,7 +35,7 @@ class Portfolio:
         if start_time is None:
             start_time = self._get_last_transaction_time()
         ops = None
-        with KucoinClient() as kucoin:
+        with KucoinSpotClient() as kucoin:
             try:
                 kucoin_ops = kucoin.get_account_operations(start_time)
                 if kucoin_ops.size > 0:
@@ -71,7 +73,7 @@ class Portfolio:
         return to_transactions(tr)
 
     def get_positions(self):
-        with KucoinClient() as kucoin:
+        with KucoinSpotClient() as kucoin:
             try:
                 tr = kucoin.get_balances()
             except:
@@ -142,7 +144,7 @@ class Portfolio:
         if start_time is None:
             start_time = self._get_first_transaction_time()
         ops = None
-        with KucoinClient() as kucoin:
+        with KucoinSpotClient() as kucoin:
             try:
                 kucoin_ops = kucoin.get_orders(start_time=start_time, status='done')
                 if kucoin_ops.size > 0:
@@ -171,6 +173,10 @@ class Portfolio:
             # ops.set_index('id', inplace=True)
             ops.sort_values(by=['time'], ascending=False, inplace=True)
         return ops
+
+    def get_futures(self):
+        with KucoinFuturesClient() as futures:
+            return futures.get_positions()
 
     def _get_last_transaction_time(self) -> datetime:
         return self._db.read_transactions()['time'].max()

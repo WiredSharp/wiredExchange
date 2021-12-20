@@ -44,6 +44,14 @@ if profile == 'EBL':
     # transactions = wallet.get_transaction()[['base_currency', 'time', 'side', 'price', 'size']]
     # transactions.set_index('base_currency', inplace=True)
     st.dataframe(orders.head(15))
+
+    st.text("futures positions:")
+    futures = wallet.get_futures()[['symbol', 'markPrice', 'realisedPnl', 'avgEntryPrice', 'unrealisedPnlPcnt', 'realLeverage', 'openingTimestamp', 'liquidationPrice']]
+    # orders.set_index('base_currency', inplace=True)
+    # transactions = wallet.get_transaction()[['base_currency', 'time', 'side', 'price', 'size']]
+    # transactions.set_index('base_currency', inplace=True)
+    st.dataframe(futures.head(15))
+
 else:
     if profile == 'POL':
         st.title(f'{profile} Wallet')

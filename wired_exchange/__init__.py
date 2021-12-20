@@ -6,7 +6,7 @@ import os.path
 from datetime import datetime
 
 from wired_exchange.ftx import FTXClient
-from wired_exchange.kucoin import KucoinClient
+from wired_exchange.kucoin import KucoinSpotClient
 from wired_exchange.storage import WiredStorage
 from wired_exchange.core import config, merge
 

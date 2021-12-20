@@ -1,14 +1,9 @@
 import asyncio
-import base64
 import functools
-import hashlib
-import hmac
-import time
 from datetime import datetime, timedelta
 from typing import Literal, Union
 
 import httpx
-import numpy as np
 import pandas as pd
 import tzlocal
 from pandas import DataFrame
@@ -16,10 +11,11 @@ from pandas import DataFrame
 from wired_exchange.core import to_timestamp, to_transactions, to_klines
 from wired_exchange.core.ExchangeClient import ExchangeClient
 from wired_exchange.kucoin import CandleStickResolution
+from wired_exchange.kucoin.KucoinAuthenticator import KucoinAuthenticator
 from wired_exchange.kucoin.WebSocket import KucoinWebSocket
 
 
-class KucoinClient(ExchangeClient):
+class KucoinSpotClient(ExchangeClient):
 
     def __init__(self, api_key: str = None, api_passphrase: str = None,
                  api_secret: str = None, host_url: str = None):
@@ -27,23 +23,10 @@ class KucoinClient(ExchangeClient):
         self._api_passphrase = api_passphrase if api_passphrase is not None else self._get_exchange_env_value(
             'api_passphrase')
         self._ws = None
+        self._authenticator = KucoinAuthenticator(self._api_key, self._api_passphrase, self._api_secret)
 
     def _authenticate(self, request):
-        ts = int(round(time.time())) * 1000
-        self._logger.debug(f'timestamp {ts}')
-        signature_payload = f'{str(ts)}{request.method.upper()}{request.url.raw_path.decode("utf-8")}'
-        if request.content:
-            signature_payload += request.content.decode('utf-8')
-        signature = base64.b64encode(
-            hmac.new(self._api_secret.encode('utf-8'), signature_payload.encode('utf-8'), hashlib.sha256).digest())
-        self._logger.debug(f'payload {signature_payload}')
-        passphrase = base64.b64encode(
-            hmac.new(self._api_secret.encode('utf-8'), self._api_passphrase.encode('utf-8'), hashlib.sha256).digest())
-        request.headers['KC-API-SIGN'] = signature.decode('utf-8')
-        request.headers['KC-API-TIMESTAMP'] = str(ts)
-        request.headers['KC-API-KEY'] = self._api_key
-        request.headers['KC-API-PASSPHRASE'] = passphrase.decode('utf-8')
-        request.headers['KC-API-KEY-VERSION'] = "2"
+        self._authenticator.authenticate(request)
 
     def get_transactions(self, start_time, end_time=None,
                          trade_type: Literal['spot', 'margin'] = 'spot') -> pd.DataFrame:
@@ -196,7 +179,6 @@ class KucoinClient(ExchangeClient):
         balances = pd.DataFrame(balances_json)
         if balances.size == 0:
             return balances
-        balances.drop(columns=['id', 'type', 'holds'], inplace=True)
         balances['balance'] = pd.to_numeric(balances['balance'])
         balances = balances[balances['balance'] != 0.0]
         balances['available'] = pd.to_numeric(balances['available'])
@@ -208,7 +190,8 @@ class KucoinClient(ExchangeClient):
             balances.drop(columns=['symbol', 'symbolName'], inplace=True)
         except:
             self._logger.warning('cannot retrieve current tickers', exc_info=True)
-        balances.rename(columns=dict(balance='total', averagePrice='price'), inplace=True)
+        balances.drop(columns=['averagePrice'], inplace=True)
+        balances.rename(columns=dict(balance='total', last='price'), inplace=True)
         balances.set_index('currency', inplace=True)
         balances['platform'] = self.platform
         balances.convert_dtypes()

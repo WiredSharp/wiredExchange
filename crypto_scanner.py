@@ -8,7 +8,7 @@ from msvcrt import getch
 
 import pandas as pd
 from dotenv import load_dotenv
-from wired_exchange.kucoin import KucoinClient
+from wired_exchange.kucoin import KucoinSpotClient
 from wired_exchange.core.ExchangeClient import ExchangeClient
 from wired_exchange.kucoin.WebSocket import WebSocketMessageHandler, WebSocketNotification
 

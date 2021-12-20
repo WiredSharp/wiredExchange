@@ -19,7 +19,7 @@ import xlsxwriter
 from wired_exchange import import_transactions, WiredStorage
 from wired_exchange.core import read_transactions
 from wired_exchange.ftx.FTXClient import FTXClient
-from wired_exchange.kucoin import KucoinClient, CandleStickResolution
+from wired_exchange.kucoin import KucoinSpotClient, KucoinFuturesClient, CandleStickResolution
 from wired_exchange.kucoin.WebSocket import WebSocketMessageHandler
 from wired_exchange.portfolio import Portfolio
 
@@ -73,7 +73,6 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 # print(tr)
 
 # import_transactions('EBL')
-# with KucoinClient() as kucoin:
 
 # db = WiredStorage('EBL')
 # with FTXClient() as ftx:
@@ -94,90 +93,91 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 #         s, lambda s=s: asyncio.create_task(shutdown(loop, signal=s))
 #     )
 
-async def shutdown(signal, loop):
-    """Cleanup tasks tied to the service's shutdown."""
-    logger.info(f"Received exit signal {signal.name}...")
-    tasks = [t for t in asyncio.all_tasks() if t is not
-             asyncio.current_task()]
-
-    [task.cancel() for task in tasks]
-
-    logger.info(f"Cancelling {len(tasks)} outstanding tasks")
-    await asyncio.gather(*tasks)
-    loop.stop()
-
-
-async def main(kucoin):
-    # Not supported under windows
-    # May want to catch other signals too
-    # signals = (signal.SIGTERM, signal.SIGINT)
-    # for s in signals:
-    #     loop.add_signal_handler(
-    #         s, lambda s=s: asyncio.create_task(shutdown(s, loop)))
-    tasks = [asyncio.create_task(monitor_tasks()),
-             asyncio.create_task(kucoin.read_topics_async([('AVAX', 'USDT', CandleStickResolution.MIN_1)]))]
-    await asyncio.gather(*tasks)
-
-
-class MyCandleStrategy(WebSocketMessageHandler):
-    def __init__(self, topics: list[(str, str, CandleStickResolution)]):
-        self._topics = topics
-        self._logger = logging.getLogger(type(self).__name__)
-        self._topics_pattern = [f'"topic":"/market/candles:{bc}-{qc}_{res.value}"' for bc, qc, res in self._topics]
-
-    # {"type":"message","topic":"/market/candles:AVAX-USDT_1min","subject":"trade.candles.update","data":{"symbol":"AVAX-USDT","candles":["1638911040","90.11","89.954","90.11","89.938","441.7103","39779.5127417"],"time":1638911078201789417}}
-    def can_handle(self, message: str) -> bool:
-        for candle in self._topics_pattern:
-            if candle in message:
-                return True
-        return False
-
-    def handle(self, message: str):
-        self._logger.info(f'processing {message}')
-
-    @property
-    def topics(self):
-        return self._topics
-
-
-class MyTickerStrategy(WebSocketMessageHandler):
-    def __init__(self, tickers: Union[list[(str, str)], None]):
-        self._tickers = tickers
-        self._logger = logging.getLogger(type(self).__name__)
-        if tickers is None:
-            self._tickers_pattern = [f'"topic":"/market/ticker:']
-        else:
-            self._tickers_pattern = [f'"topic":"/market/ticker:{bc}-{qc}"' for bc, qc in self._tickers]
-
-    # {"type":"message","topic":"/market/tickers:AVAX-USDT_1min","subject":"trade.candles.update","data":{"symbol":"AVAX-USDT","candles":["1638911040","90.11","89.954","90.11","89.938","441.7103","39779.5127417"],"time":1638911078201789417}}
-    def can_handle(self, message: str) -> bool:
-        for ticker in self._tickers_pattern:
-            if ticker in message:
-                return True
-        return False
-
-    def handle(self, message: str):
-        self._logger.info(f'processing ticker {message}')
-
-    @property
-    def tickers(self):
-        return self._tickers
-
-
-async def scenario(kucoin: KucoinClient):
-    await kucoin.register_candle_strategy_async(MyCandleStrategy(
-        [('AVAX', 'USDT', CandleStickResolution.MIN_1), ('MANA', 'USDT', CandleStickResolution.MIN_1)]))
-    logger.info('first strategy registered')
-    await kucoin.register_ticker_strategy_async(MyTickerStrategy(None))
-    logger.info('second strategy registered')
-    await asyncio.sleep(15)
-    kucoin.stop_reading()
+# async def shutdown(signal, loop):
+#     """Cleanup tasks tied to the service's shutdown."""
+#     logger.info(f"Received exit signal {signal.name}...")
+#     tasks = [t for t in asyncio.all_tasks() if t is not
+#              asyncio.current_task()]
+#
+#     [task.cancel() for task in tasks]
+#
+#     logger.info(f"Cancelling {len(tasks)} outstanding tasks")
+#     await asyncio.gather(*tasks)
+#     loop.stop()
+#
+#
+# async def main(kucoin):
+#     # Not supported under windows
+#     # May want to catch other signals too
+#     # signals = (signal.SIGTERM, signal.SIGINT)
+#     # for s in signals:
+#     #     loop.add_signal_handler(
+#     #         s, lambda s=s: asyncio.create_task(shutdown(s, loop)))
+#     tasks = [asyncio.create_task(monitor_tasks()),
+#              asyncio.create_task(kucoin.read_topics_async([('AVAX', 'USDT', CandleStickResolution.MIN_1)]))]
+#     await asyncio.gather(*tasks)
+#
+#
+# class MyCandleStrategy(WebSocketMessageHandler):
+#     def __init__(self, topics: list[(str, str, CandleStickResolution)]):
+#         self._topics = topics
+#         self._logger = logging.getLogger(type(self).__name__)
+#         self._topics_pattern = [f'"topic":"/market/candles:{bc}-{qc}_{res.value}"' for bc, qc, res in self._topics]
+#
+#     # {"type":"message","topic":"/market/candles:AVAX-USDT_1min","subject":"trade.candles.update","data":{"symbol":"AVAX-USDT","candles":["1638911040","90.11","89.954","90.11","89.938","441.7103","39779.5127417"],"time":1638911078201789417}}
+#     def can_handle(self, message: str) -> bool:
+#         for candle in self._topics_pattern:
+#             if candle in message:
+#                 return True
+#         return False
+#
+#     def handle(self, message: str):
+#         self._logger.info(f'processing {message}')
+#
+#     @property
+#     def topics(self):
+#         return self._topics
+#
+#
+# class MyTickerStrategy(WebSocketMessageHandler):
+#     def __init__(self, tickers: Union[list[(str, str)], None]):
+#         self._tickers = tickers
+#         self._logger = logging.getLogger(type(self).__name__)
+#         if tickers is None:
+#             self._tickers_pattern = [f'"topic":"/market/ticker:']
+#         else:
+#             self._tickers_pattern = [f'"topic":"/market/ticker:{bc}-{qc}"' for bc, qc in self._tickers]
+#
+#     # {"type":"message","topic":"/market/tickers:AVAX-USDT_1min","subject":"trade.candles.update","data":{"symbol":"AVAX-USDT","candles":["1638911040","90.11","89.954","90.11","89.938","441.7103","39779.5127417"],"time":1638911078201789417}}
+#     def can_handle(self, message: str) -> bool:
+#         for ticker in self._tickers_pattern:
+#             if ticker in message:
+#                 return True
+#         return False
+#
+#     def handle(self, message: str):
+#         self._logger.info(f'processing ticker {message}')
+#
+#     @property
+#     def tickers(self):
+#         return self._tickers
+#
+#
+# async def scenario(kucoin: KucoinClient):
+#     await kucoin.register_candle_strategy_async(MyCandleStrategy(
+#         [('AVAX', 'USDT', CandleStickResolution.MIN_1), ('MANA', 'USDT', CandleStickResolution.MIN_1)]))
+#     logger.info('first strategy registered')
+#     await kucoin.register_ticker_strategy_async(MyTickerStrategy(None))
+#     logger.info('second strategy registered')
+#     await asyncio.sleep(15)
+#     kucoin.stop_reading()
 
 
 if __name__ == "__main__":
     wallet = Portfolio('EBL')
     print(wallet.get_summary())
-    print(wallet.get_orders())
+    print(wallet.get_futures())
+    # print(wallet.get_orders())
     # wallet.import_transactions(start_time=datetime.now(tzlocal.get_localzone()) - timedelta(days=7))
     # print(wallet.get_summary()['average_buy_price_usd'])
 

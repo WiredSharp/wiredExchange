@@ -1,4 +1,5 @@
 """Kucoin platform API helpers"""
 
 from .Common import *
-from .KucoinClient import *
+from .KucoinSpotClient import *
+from .KucoinFuturesClient import *
