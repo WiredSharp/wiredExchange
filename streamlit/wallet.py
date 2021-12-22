@@ -31,22 +31,30 @@ if profile == 'EBL':
         import_all(wallet)
 
     st.title(f'{profile} Wallet')
-    summary = wallet.get_summary()
-    summary = summary[(summary['total'] > .0001) & (summary.index != 'USDT') & (summary.index != 'USD')]
     st.text("Positions:")
-    st.dataframe(summary[['total', 'available', 'PnL_pc', 'average_buy_price', 'price',
-                          'PnL_tt', 'average_buy_price_usd', 'price_usd']]
+    summary = wallet.get_summary()
+    if summary.size > 0:
+        summary = summary[(summary['total'] > .0001) & (summary.index != 'USDT') & (summary.index != 'USD')]
+        summary = summary[['total', 'available', 'PnL_pc', 'average_buy_price', 'price',
+                              'PnL_tt', 'average_buy_price_usd', 'price_usd']]
+    st.dataframe(summary
                  .style.applymap(foreground_by_sign, subset=['PnL_pc', 'PnL_tt']))
 
     st.text("last orders:")
-    orders = wallet.get_orders()[['base_currency', 'side', 'price', 'size', 'status', 'time']]
+    orders = wallet.get_orders()
+    if orders.size > 0:
+        orders = orders[['base_currency', 'side', 'price', 'size', 'status', 'time']]
     orders.set_index('base_currency', inplace=True)
     # transactions = wallet.get_transaction()[['base_currency', 'time', 'side', 'price', 'size']]
     # transactions.set_index('base_currency', inplace=True)
     st.dataframe(orders.head(15))
 
     st.text("futures positions:")
-    futures = wallet.get_futures()[['symbol', 'markPrice', 'realisedPnl', 'avgEntryPrice', 'unrealisedPnlPcnt', 'realLeverage', 'openingTimestamp', 'liquidationPrice']]
+    futures = wallet.get_futures()
+
+    if futures.size > 0:
+        futures = futures[['symbol', 'markPrice', 'realisedPnl', 'avgEntryPrice',
+                                        'unrealisedPnlPcnt', 'realLeverage', 'openingTimestamp', 'liquidationPrice']]
     # orders.set_index('base_currency', inplace=True)
     # transactions = wallet.get_transaction()[['base_currency', 'time', 'side', 'price', 'size']]
     # transactions.set_index('base_currency', inplace=True)

@@ -350,6 +350,9 @@ class KucoinSpotClient(ExchangeClient):
         orders.loc[:, 'time'] = pd.to_datetime(orders['createdAt'], unit='ms', utc=True)
         orders.loc[:, 'base_currency'] = orders['symbol'].apply(lambda s: s.split('-')[0])
         orders.loc[:, 'quote_currency'] = orders['symbol'].apply(lambda s: s.split('-')[1])
+        orders.loc[:, 'isActive'].fillna(True, inplace=True)
+        orders.loc[(orders['isActive'] == False) & orders['status'].isna(), 'status'] = 'FILLED'
+        orders.loc[(orders['isActive'] == True) & orders['status'].isna(), 'status'] = 'NEW'
         if 'fee' in orders.columns:
             orders = orders.loc[:, ('id', 'base_currency', 'quote_currency', 'type', 'side', 'price',
                                     'size', 'status', 'fee', 'feeCurrency', 'time')]
@@ -360,7 +363,6 @@ class KucoinSpotClient(ExchangeClient):
         orders.loc[:, 'price'] = pd.to_numeric(orders['price'])
         orders.loc[:, 'size'] = pd.to_numeric(orders['size'])
         orders.astype(dict(status='string'))
-        orders.loc[:, 'status'].fillna('FILLED', inplace=True)
         orders.rename(columns={'feeCurrency': 'fee_currency'})
         orders.loc[:, 'platform'] = self.platform
         return orders
