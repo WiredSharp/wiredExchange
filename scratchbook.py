@@ -176,8 +176,8 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 if __name__ == "__main__":
     wallet = Portfolio('EBL')
     # print(wallet.get_summary())
-    # print(wallet.get_futures())
-    print(wallet.get_orders())
+    print(wallet.get_futures())
+    # print(wallet.get_orders())
     # wallet.import_transactions(start_time=datetime.now(tzlocal.get_localzone()) - timedelta(days=7))
     # print(wallet.get_summary()['average_buy_price_usd'])
 

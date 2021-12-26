@@ -43,6 +43,8 @@ class KucoinFuturesClient(ExchangeClient):
 
     def _to_positions(self, json):
         positions = pd.DataFrame(json['data'])
+        if positions.size == 0:
+            return positions
         positions.drop(columns=['id', 'maintMarginReq', 'riskLimit', 'crossMode', 'markValue', 'unrealisedRoePcnt', 'posMaint', 'maintMargin', 'realisedGrossPnl', 'posCross', 'delevPercentage', 'realisedGrossCost'], inplace=True)
         positions['realLeverage'] = pd.to_numeric(positions['realLeverage'])
         positions['currentQty'] = pd.to_numeric(positions['currentQty'])

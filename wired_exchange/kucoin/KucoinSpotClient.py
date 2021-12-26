@@ -351,6 +351,8 @@ class KucoinSpotClient(ExchangeClient):
         orders.loc[:, 'base_currency'] = orders['symbol'].apply(lambda s: s.split('-')[0])
         orders.loc[:, 'quote_currency'] = orders['symbol'].apply(lambda s: s.split('-')[1])
         orders.loc[:, 'isActive'].fillna(True, inplace=True)
+        if 'status' not in orders.columns:
+            orders['status'] = pd.NA
         orders.loc[(orders['isActive'] == False) & orders['status'].isna(), 'status'] = 'FILLED'
         orders.loc[(orders['isActive'] == True) & orders['status'].isna(), 'status'] = 'NEW'
         if 'fee' in orders.columns:
