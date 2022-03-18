@@ -8,6 +8,7 @@ import streamlit as st
 
 import glob
 
+
 def get_profiles():
     return [os.path.basename(p.split('_')[0]) for p in glob.glob('./*.sqlite')]
 
@@ -36,7 +37,7 @@ if profile == 'EBL':
     if summary.size > 0:
         summary = summary[(summary['total'] > .0001) & (summary.index != 'USDT') & (summary.index != 'USD')]
         summary = summary[['total', 'available', 'PnL_pc', 'average_buy_price', 'price',
-                              'PnL_tt', 'average_buy_price_usd', 'price_usd']]
+                           'PnL_tt', 'average_buy_price_usd', 'price_usd']]
     st.dataframe(summary
                  .style.applymap(foreground_by_sign, subset=['PnL_pc', 'PnL_tt']))
 
@@ -54,7 +55,7 @@ if profile == 'EBL':
 
     if futures.size > 0:
         futures = futures[['symbol', 'markPrice', 'realisedPnl', 'avgEntryPrice',
-                                        'unrealisedPnlPcnt', 'realLeverage', 'openingTimestamp', 'liquidationPrice']]
+                           'unrealisedPnlPcnt', 'realLeverage', 'openingTimestamp', 'liquidationPrice']]
     # orders.set_index('base_currency', inplace=True)
     # transactions = wallet.get_transaction()[['base_currency', 'time', 'side', 'price', 'size']]
     # transactions.set_index('base_currency', inplace=True)
@@ -68,7 +69,8 @@ else:
         balances = binance.get_balances()
         st.dataframe(balances[(balances['total'] > .0001) & (balances.index != 'USDT') & (balances.index != 'USD')])
         st.text("last orders:")
-        transactions = binance.get_transactions()[['base_currency', 'side', 'price', 'size', 'amount', 'status', 'time']]
+        transactions = binance.get_transactions()[
+            ['base_currency', 'side', 'price', 'size', 'amount', 'status', 'time']]
         transactions.set_index('base_currency', inplace=True)
         st.dataframe(transactions.head(15))
 
