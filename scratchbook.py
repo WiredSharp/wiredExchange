@@ -16,7 +16,7 @@ from kucoin.client import Market
 
 import xlsxwriter
 
-from wired_exchange import import_transactions, WiredStorage
+from wired_exchange import WiredStorage
 from wired_exchange.core import read_transactions
 from wired_exchange.ftx.FTXClient import FTXClient
 from wired_exchange.kucoin import KucoinSpotClient, KucoinFuturesClient, CandleStickResolution
@@ -46,20 +46,16 @@ def get_or_create_eventloop():
             return asyncio.get_event_loop()
 
 
-kucoin_sandbox = False
 
-if kucoin_sandbox:
-    load_dotenv('.env-sandbox')
-    kucoin_host_url = 'https://openapi-sandbox.kucoin.com'
-else:
-    load_dotenv()
-    kucoin_host_url = None
 
-logging.config.fileConfig('logging.conf')
-
-logger = logging.getLogger('main')
-logger.info('--------------------- starting Wired Exchange ---------------------')
-
+def place_orders():
+    with KucoinSpotClient(host_url=kucoin_host_url) as kucoin:
+        kucoin.place_order('KCS-USDT', side='buy', limit=3.52, size=100,
+                           take_profit_pct=10.0, stop_loss_pct=5.0)
+        kucoin.place_order('KCS-USDT', side='buy', stop=3.51, limit=3.52, amount=100,
+                           take_profit_pct=10.0, stop_loss_pct=5.0)
+        kucoin.place_order('KCS-USDT', side='sell', stop=5.51, limit=5.52, size=10, amount=100,
+                           take_profit_pct=10.0, stop_loss_pct=5.0)
 
 # shutil.copyfile('\\'.join([notebook_folder, 'ftx_transactions.json']), 'data/ftx_transactions.json')
 # shutil.copyfile('\\'.join([notebook_folder, 'kucoin_transactions.json']), 'data/kucoin_transactions.json')
@@ -174,9 +170,32 @@ logger.info('--------------------- starting Wired Exchange ---------------------
 
 
 if __name__ == "__main__":
+    kucoin_sandbox = False
+
+    if kucoin_sandbox:
+        load_dotenv('.env-sandbox')
+        kucoin_host_url = 'https://openapi-sandbox.kucoin.com/api'
+    else:
+        load_dotenv()
+        kucoin_host_url = None
+
+    logging.config.fileConfig('logging.conf')
+
+    logger = logging.getLogger('main')
+    logger.info('--------------------- starting Wired Exchange ---------------------')
+    # with KucoinSpotClient() as kucoin:
+    #     print(kucoin.get_account_operations(start_time=datetime.now(tzlocal.get_localzone())))
     wallet = Portfolio('EBL')
-    # print(wallet.get_summary())
-    print(wallet.get_futures())
+    # wallet.import_transactions()
+    # wallet.import_account_operations()
+    summary = wallet.get_summary()
+    summary = summary[(summary['total'] > .0001) & (summary.index != 'USDT') & (summary.index != 'USD')]
+    summary = summary[['total', 'available', 'PnL_pc', 'average_buy_price', 'price',
+                       'PnL_tt', 'average_buy_price_usd', 'price_usd']]
+    print(summary)
+    print(wallet.get_orders())
+    # print(wallet.get_average_buy_prices())
+    # print(wallet.get_futures())
     # print(wallet.get_orders())
     # wallet.import_transactions(start_time=datetime.now(tzlocal.get_localzone()) - timedelta(days=7))
     # print(wallet.get_summary()['average_buy_price_usd'])
@@ -194,43 +213,43 @@ if __name__ == "__main__":
     #     #                           datetime.fromisoformat('2021-11-10T21:53:00+01:00')))
     #
     #     print(kucoin.get_orders(start_time=datetime.now(tzlocal.get_localzone()) - timedelta(days=40)))
-        # print(kucoin.get_orders())
-        # asyncio.run(scenario(kucoin))
+    # print(kucoin.get_orders())
+    # asyncio.run(scenario(kucoin))
     # loop = asyncio.get_running_loop()
     # loop.set_debug(True)
     # loop.create_task(monitor_tasks())
     # loop.create_task(kucoin.read_topics_async([('AVAX', 'USDT', CandleStickResolution._1min)]))
     # loop.run_forever()
-# operations = kucoin.get_account_operations(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
-# print(operations)
-# orders = kucoin.get_orders_v1(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
-# print(orders)
-# asyncio.run(kucoin.read_ws_async())
-#         print(ktr)
-#         kucoin_tr, _ = ftx.enrich_usd_prices(ktr)
-# tr = tr.append(kucoin_tr)
-#
-# tr.to_json('data/ebr_transactions.json', orient='index', date_format='iso')
+    # operations = kucoin.get_account_operations(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
+    # print(operations)
+    # orders = kucoin.get_orders_v1(start_time=datetime.fromisoformat('2021-11-10T21:53:00+01:00'))
+    # print(orders)
+    # asyncio.run(kucoin.read_ws_async())
+    #         print(ktr)
+    #         kucoin_tr, _ = ftx.enrich_usd_prices(ktr)
+    # tr = tr.append(kucoin_tr)
+    #
+    # tr.to_json('data/ebr_transactions.json', orient='index', date_format='iso')
 
-# tr = read_transactions('data/ebr_transactions.json')
+    # tr = read_transactions('data/ebr_transactions.json')
 
-# tr = db.read_transactions()
-# tr.to_json('data/ebr_transactions.json', orient='index', date_format='iso')
-# db.save_transactions(tr)
+    # tr = db.read_transactions()
+    # tr.to_json('data/ebr_transactions.json', orient='index', date_format='iso')
+    # db.save_transactions(tr)
 
-# wallet = Portfolio('EBL')
-#
-# wallet.import_account_operations(datetime.fromisoformat('2021-11-10T18:53:00+01:00'))
-# wallet.import_account_operations()
-# wallet.import_transactions(datetime.fromisoformat('2021-12-04T18:53:00+01:00'))
-# wallet.get_summary().to_csv('data/positions.csv')
-# p = wallet.get_positions()
-# print(p)
-# print(wallet.get_average_buy_prices())
-# print(p['platform'])
-# tr = wallet.get_transaction()
-# tr['time']=tr['time'].astype('string')
-# wallet.get_transaction().to_json('data/ebr_wallet_transactions.json', orient='index', date_format='iso')
-# tr.to_excel('data/ebr_wallet_transactions.xlsx', engine='xlsxwriter')
-# print(wallet.get_transaction())
-logger.info('--------------------- Wired Exchange Ended ---------------------')
+    # wallet = Portfolio('EBL')
+    #
+    # wallet.import_account_operations(datetime.fromisoformat('2021-11-10T18:53:00+01:00'))
+    # wallet.import_account_operations()
+    # wallet.import_transactions(datetime.fromisoformat('2021-12-04T18:53:00+01:00'))
+    # wallet.get_summary().to_csv('data/positions.csv')
+    # p = wallet.get_positions()
+    # print(p)
+    # print(wallet.get_average_buy_prices())
+    # print(p['platform'])
+    # tr = wallet.get_transaction()
+    # tr['time']=tr['time'].astype('string')
+    # wallet.get_transaction().to_json('data/ebr_wallet_transactions.json', orient='index', date_format='iso')
+    # tr.to_excel('data/ebr_wallet_transactions.xlsx', engine='xlsxwriter')
+    # print(wallet.get_transaction())
+    logger.info('--------------------- Wired Exchange Ended ---------------------')
