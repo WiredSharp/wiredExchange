@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import logging
 import time
+from httpx import Request
 
 class KucoinAuthenticator:
     def __init__(self, api_key: str = None, api_passphrase: str = None,
@@ -12,7 +13,7 @@ class KucoinAuthenticator:
         self._api_key = api_key
         self._logger = logging.getLogger(type(self).__name__)
 
-    def authenticate(self, request):
+    def authenticate(self, request: Request):
         ts = int(round(time.time())) * 1000
         self._logger.debug(f'timestamp {ts}')
         signature_payload = f'{str(ts)}{request.method.upper()}{request.url.raw_path.decode("utf-8")}'

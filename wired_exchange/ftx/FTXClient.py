@@ -65,7 +65,7 @@ class FTXClient(ExchangeClient):
     def get_transactions(self, start_time=None, end_time=None):
         self.open()
         params = {}
-        self._add_date_range_params(params, start_time, end_time, precision='s')
+        self._set_date_range_params(params, start_time, end_time, precision='s')
         try:
             response = self._send_get('/fills', params, authenticated=True)
             return self._to_transactions(response['result'])
@@ -76,7 +76,7 @@ class FTXClient(ExchangeClient):
                            start_time: Union[datetime, int, float], end_time: Union[datetime, int, float, None] = None):
         self.open()
         params = {'resolution': resolution}
-        self._add_date_range_params(params, start_time, end_time, precision='s')
+        self._set_date_range_params(params, start_time, end_time, precision='s')
         params['start_time'] -= resolution
         params['end_time'] += resolution
         try:
@@ -145,7 +145,7 @@ class FTXClient(ExchangeClient):
                    end_time: Union[datetime, int, float, None] = None):
         self.open()
         params = {}
-        self._add_date_range_params(params, start_time, end_time, precision='s')
+        self._set_date_range_params(params, start_time, end_time, precision='s')
         try:
             response = self._send_get(f'/orders/history', params=params, authenticated=True)
             return self._to_orders(response['result'])
@@ -240,7 +240,7 @@ class FTXClient(ExchangeClient):
     def get_account_operations(self, start_time=None, end_time=None) -> pd.DataFrame:
         self.open()
         params = {}
-        self._add_date_range_params(params, start_time, end_time, 's')
+        self._set_date_range_params(params, start_time, end_time, 's')
         try:
             columns = ['size', 'coin',
                        'status', 'time', 'txid']
@@ -283,7 +283,7 @@ class FTXClient(ExchangeClient):
         return frame
 
     @staticmethod
-    def _add_date_range_params(params: dict, start_time, end_time, precision) -> dict:
+    def _set_date_range_params(params: dict, start_time, end_time, precision) -> dict:
         if start_time is not None:
             params['start_time'] = to_timestamp(start_time, precision) if isinstance(start_time, datetime) else int(
                 round(start_time))

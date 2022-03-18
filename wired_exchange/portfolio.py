@@ -23,8 +23,7 @@ class Portfolio:
             tr = ftx.get_transactions(start_time=start_time)
             with KucoinSpotClient() as kucoin:
                 try:
-                    kucoin_tr, _ = ftx.enrich_usd_prices(
-                        kucoin.get_transactions(start_time=start_time))
+                    kucoin_tr, _ = ftx.enrich_usd_prices(kucoin.get_transactions(start_time=start_time))
                     tr = tr.append(kucoin_tr)
                 except:
                     self._logger.error('cannot retrieve operations from Kucoin', exc_info=True)
@@ -179,7 +178,7 @@ class Portfolio:
             return futures.get_positions()
 
     def _get_last_transaction_time(self) -> datetime:
-        return self._db.read_transactions()['time'].max()
+        return self._db.read_transactions()['time'].max().to_pydatetime()
 
     def _get_first_transaction_time(self) -> datetime:
-        return self._db.read_transactions()['time'].min()
+        return self._db.read_transactions()['time'].min().to_pydatetime()

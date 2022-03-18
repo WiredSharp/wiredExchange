@@ -1,12 +1,15 @@
+import datetime
 import os
+from datetime import timedelta
 
 import pandas as pd
 import pytomlpp
+import tzlocal
 
 resource_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 config_path = os.path.join(resource_path, 'wired_exchange.toml')
 
-VERSION = '1.4.2'
+VERSION = '1.4.4'
 
 with open(config_path, 'r') as cfg:
     _config = pytomlpp.load(cfg)
@@ -33,6 +36,9 @@ def merge(a, b, path=None):
 
 def to_timestamp(dt, resolution) -> int:
     return to_timestamp_in_seconds(dt) if resolution == 's' else to_timestamp_in_milliseconds(dt)
+
+def from_timestamp(timestamp) -> datetime:
+    return datetime.datetime.fromtimestamp(timestamp, tzlocal.get_localzone())
 
 def to_timestamp_in_seconds(dt) -> int:
     return int(round(dt.timestamp()))
