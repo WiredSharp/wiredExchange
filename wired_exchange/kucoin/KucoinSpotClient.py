@@ -120,7 +120,7 @@ class KucoinSpotClient(ExchangeClient):
                 axis='columns', inplace=True)
         tr.astype(dict(order_id='string', trade_id='string'))
         tr['platform'] = self.platform
-        tr['id'] = tr['trade_id'].apply(lambda id: f'{self.platform}_{id}')
+        tr['id'] = tr['trade_id'].apply(lambda t_id: f'{self.platform}_{t_id}')
         return to_transactions(tr)
 
     def _to_klines(self, candles: dict, base: str, quote: str) -> pd.DataFrame:
