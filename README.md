@@ -42,6 +42,31 @@
 - [ ] Defines events to be subscribed by bots
   - [ ] price change
 
+# environment
+
+following environment variables are consumed by corresponding connector.
+
+## Kucoin
+- kucoin_api_passphrase
+- kucoin_api_key
+- kucoin_api_secret
+- kucoin_futures_api_passphrase
+- kucoin_futures_api_key
+- kucoin_futures_api_secret
+
+## Binance
+- binance_api_key
+- binance_api_secret
+
+## FTX
+- ftx_api_key
+- ftx_api_secret
+
+## BitPanda Pro
+- bitpanda_pro_api_key
+
+## Exchange Rates
+- exchange_rates_api_key
 # libraries
 
 - python-dotenv
