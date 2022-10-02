@@ -107,7 +107,7 @@ class FTXClient(ExchangeClient):
         except BaseException as ex:
             raise Exception(f'cannot retrieve {base_currency}/{quote_currency} price at {asof_time} from FTX') from ex
 
-    def resolve_current_price(self, base_currency: str, quote_currency: str):
+    def get_live_rate(self, base_currency: str, quote_currency: str):
         self.open()
         try:
             response = self._send_get(f'/markets/{base_currency}/{quote_currency}')

@@ -1,15 +1,17 @@
 import datetime
 import os
-from datetime import timedelta
+from typing import Union, Literal
+from datetime import datetime, timedelta
 
 import pandas as pd
 import pytomlpp
+import pytz
 import tzlocal
 
 resource_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 config_path = os.path.join(resource_path, 'wired_exchange.toml')
 
-VERSION = '1.4.4'
+VERSION = '1.5.0'
 
 with open(config_path, 'r') as cfg:
     _config = pytomlpp.load(cfg)
@@ -34,18 +36,26 @@ def merge(a, b, path=None):
             a[key] = b[key]
     return a
 
+
 def to_timestamp(dt, resolution) -> int:
     return to_timestamp_in_seconds(dt) if resolution == 's' else to_timestamp_in_milliseconds(dt)
 
-def from_timestamp(timestamp) -> datetime:
-    return datetime.datetime.fromtimestamp(timestamp, tzlocal.get_localzone())
 
-def to_timestamp_in_seconds(dt) -> int:
+def from_timestamp(timestamp: Union[int, float], precision: Literal['s', 'ms']) -> datetime:
+    if precision == 's':
+        dt = datetime.datetime.fromtimestamp(timestamp, tzlocal.get_localzone())
+    else:
+        dt = datetime.datetime.fromtimestamp(timestamp / 1000, tzlocal.get_localzone())
+        dt += timedelta(milliseconds=timestamp % 1000)
+    return dt
+
+
+def to_timestamp_in_seconds(dt: datetime) -> int:
     return int(round(dt.timestamp()))
 
 
-def to_timestamp_in_milliseconds(dt) -> int:
-    return int(round(dt.timestamp() * 1000))
+def to_timestamp_in_milliseconds(dt: datetime) -> int:
+    return int(round(dt.timestamp() * 1000 + (dt.microsecond / 1000)))
 
 
 def read_transactions(path_or_buf, orient='index') -> pd.DataFrame:
@@ -79,3 +89,8 @@ def to_klines(pr, base: str = None, quote: str = None) -> pd.DataFrame:
     pr.set_index('time', inplace=True)
     pr.astype(dict(open='float', high='float', low='float', close='float', volume='float'))
     return pr
+
+
+def to_isoformat(dt: Union[datetime, int, float], precision: Literal['s', 'ms'] = None) -> str:
+    return dt.astimezone(pytz.utc).isoformat() if isinstance(dt, datetime) else \
+        from_timestamp(dt, precision).astimezone(pytz.utc).isoformat()

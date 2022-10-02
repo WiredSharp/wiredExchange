@@ -2,9 +2,10 @@ import logging
 
 import pandas as pd
 from collections import namedtuple
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Union
 from wired_exchange import WiredStorage, KucoinSpotClient
+from wired_exchange.bitpandapro import BitPandaProClient
 from wired_exchange.ftx import FTXClient
 from wired_exchange.core import to_transactions
 from wired_exchange.kucoin import KucoinFuturesClient
@@ -26,7 +27,14 @@ class Portfolio:
                     kucoin_tr, _ = ftx.enrich_usd_prices(kucoin.get_transactions(start_time=start_time))
                     tr = tr.append(kucoin_tr)
                 except:
-                    self._logger.error('cannot retrieve operations from Kucoin', exc_info=True)
+                    self._logger.error('cannot retrieve transactions from Kucoin', exc_info=True)
+            with BitPandaProClient() as bp:
+                try:
+                    bp_tr, _ = ftx.enrich_usd_prices(bp.get_transactions(start_time=start_time,
+                                                                         end_time=datetime.now(timezone.utc)))
+                    tr = tr.append(bp_tr)
+                except:
+                    self._logger.error('cannot retrieve transactions from BitPanda Pro', exc_info=True)
         self._db.save_transactions(tr)
         return tr
 
@@ -72,23 +80,32 @@ class Portfolio:
         return to_transactions(tr)
 
     def get_positions(self):
+        positions = pd.DataFrame()
         with KucoinSpotClient() as kucoin:
             try:
-                tr = kucoin.get_balances()
+                positions = positions.append(kucoin.get_balances())
             except:
                 self._logger.error('cannot retrieve balances from Kucoin', exc_info=True)
-                tr = pd.DataFrame()
+        with BitPandaProClient() as bp:
+            try:
+                positions = positions.append(bp.get_balances())
+            except:
+                self._logger.error('cannot retrieve balances from BitPanda Pro', exc_info=True)
         with FTXClient() as ftx:
             try:
-                tr = tr.append(ftx.get_balances())
+                positions = positions.append(ftx.get_balances())
             except:
                 self._logger.error('cannot retrieve balances from FTX', exc_info=True)
             try:
-                current_usdt_price = ftx.resolve_current_price('USDT', 'USD')
-                tr['price_usd'] = current_usdt_price * tr['price']
+                usdt_usd_rate = ftx.get_live_rate('USDT', 'USD')
+                usd_usdt_rate = 1 / usdt_usd_rate
+                positions['price'] = usd_usdt_rate * positions[pd.isna(positions['price']), ['price_usd']]
+                positions['price'] = positions[pd.isna(positions['price']), 'currency']\
+                    .apply(lambda c: ftx.get_live_rate(c, 'USDT'))
+                positions['price_usd'] = usdt_usd_rate * positions[pd.isna(positions['price_usd']), ['price']]
             except:
-                self._logger.error('cannot retrieve USDT current price from FTX', exc_info=True)
-        return tr
+                self._logger.error('cannot enrich prices', exc_info=True)
+        return positions
 
     def get_average_buy_prices(self):
         tr = self.get_transaction()
@@ -104,7 +121,7 @@ class Portfolio:
             if position is None:
                 position = Position(transaction.size, transaction.price, transaction.price_usd * transaction.price)
             else:
-                if transaction.side == 'sell':
+                if transaction.side.lower() == 'sell':
                     position = Position(position.size - transaction.size, position.price, position.price_usd)
                 else:  # buy
                     position = Position(position.size + transaction.size,
@@ -166,6 +183,16 @@ class Portfolio:
                         ops = ftx_ops
             except:
                 self._logger.error('cannot retrieve orders from FTX', exc_info=True)
+        with BitPandaProClient() as bp:
+            try:
+                bp_ops = bp.get_orders(start_time, end_time=datetime.now(timezone.utc), include_filled=False)
+                if bp_ops.size > 0:
+                    if ops is not None:
+                        ops = ops.append(bp_ops)
+                    else:
+                        ops = bp_ops
+            except:
+                self._logger.error('cannot retrieve orders from BitPanda Pro', exc_info=True)
         if ops is not None:
             ops.drop_duplicates(subset=['id'], inplace=True)
             ops['id'] = ops.apply(lambda row: f'{row["platform"]}_{row["id"]}', axis=1)

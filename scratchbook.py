@@ -17,6 +17,7 @@ from kucoin.client import Market
 import xlsxwriter
 
 from wired_exchange import WiredStorage
+from wired_exchange.bitpandapro import BitPandaProClient
 from wired_exchange.core import read_transactions
 from wired_exchange.ftx.FTXClient import FTXClient
 from wired_exchange.kucoin import KucoinSpotClient, KucoinFuturesClient, CandleStickResolution
@@ -183,17 +184,20 @@ if __name__ == "__main__":
 
     logger = logging.getLogger('main')
     logger.info('--------------------- starting Wired Exchange ---------------------')
+    # with BitPandaProClient()as bp:
+    #     print(bp.get_orders(include_filled=True))
     # with KucoinSpotClient() as kucoin:
     #     print(kucoin.get_account_operations(start_time=datetime.now(tzlocal.get_localzone())))
     wallet = Portfolio('EBL')
     # wallet.import_transactions()
     # wallet.import_account_operations()
-    summary = wallet.get_summary()
-    summary = summary[(summary['total'] > .0001) & (summary.index != 'USDT') & (summary.index != 'USD')]
-    summary = summary[['total', 'available', 'PnL_pc', 'average_buy_price', 'price',
-                       'PnL_tt', 'average_buy_price_usd', 'price_usd']]
-    print(summary)
-    print(wallet.get_orders())
+    positions = wallet.get_positions()
+    print(positions.loc[:, ['total', 'available', 'price', 'price_usd']])
+    # summary = summary[(summary['total'] > .0001) & (summary.index != 'USDT') & (summary.index != 'USD')]
+    # summary = summary[['total', 'available', 'PnL_pc', 'average_buy_price', 'price',
+    #                    'PnL_tt', 'average_buy_price_usd', 'price_usd']]
+    # print(summary)
+    # print(wallet.get_orders())
     # print(wallet.get_average_buy_prices())
     # print(wallet.get_futures())
     # print(wallet.get_orders())

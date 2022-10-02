@@ -7,7 +7,8 @@
   - [X] [FTX](https://docs.ftx.com/?python#rest-api)
   - [X] [Kucoin](https://docs.kucoin.com/#general)
   - [ ] [Binance](https://binance-docs.github.io/apidocs)
-  - [ ] [BitPanda](https://developers.bitpanda.com/platform/)
+  - [X] [BitPanda](https://developers.bitpanda.com/platform/)
+  - [X] [ExchangeRates](https://app.abstractapi.com/api/exchange-rates/documentation)
 - [ ] Connect to web socket market data stream
   - [ ] [FTX](https://docs.ftx.com/?python#rest-api)
   - [X] [Kucoin](https://docs.kucoin.com/#general)

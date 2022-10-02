@@ -6,3 +6,7 @@ url= "https://api.kucoin.com/api"
 [exchanges.kucoin_futures]
 url= "https://api-futures.kucoin.com/api"
 [exchanges.binance]
+[exchanges.bitpanda_pro]
+url= "https://api.exchange.bitpanda.com/public"
+[exchanges.exchange_rates]
+url="https://exchange-rates.abstractapi.com"
